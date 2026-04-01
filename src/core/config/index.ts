@@ -36,6 +36,7 @@ export {
   PROGRESS_STEP_LABELS,
   INITIAL_PROGRESS_PHASE,
   MAX_REPO_MAP_FILES,
+  MAX_READ_FILE_LINES,
 } from "./constants.js";
 
 export { loadConfig, getConfigTemplate } from "./config.js";

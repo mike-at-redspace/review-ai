@@ -7,6 +7,7 @@ import type {
   Severity,
 } from "@core/config";
 import { PROGRESS_STEP_LABELS } from "@core/config";
+import { parseToolFilePath } from "@core/ai";
 
 const SEVERITY_STYLES: Record<Severity, (text: string) => string> = {
   critical: chalk.red,
@@ -14,17 +15,6 @@ const SEVERITY_STYLES: Record<Severity, (text: string) => string> = {
   info: chalk.blue,
   nitpick: chalk.gray,
 };
-
-/** Extract a human-readable file path from raw SDK tool arguments. */
-function parseToolFilePath(toolName: string, args?: string): string {
-  if (!args) return toolName;
-  try {
-    const { file_path, path } = JSON.parse(args);
-    return file_path ?? path ?? toolName;
-  } catch {
-    return args;
-  }
-}
 
 export class HumanSink implements OutputSink {
   private toolCallCount = 0;
@@ -36,7 +26,7 @@ export class HumanSink implements OutputSink {
 
   toolCall(toolName: string, args?: string) {
     this.toolCallCount++;
-    const file = parseToolFilePath(toolName, args);
+    const file = parseToolFilePath(args) ?? toolName;
     process.stderr.write(
       chalk.cyan(`  reading ${file} (file ${this.toolCallCount})...\r`)
     );

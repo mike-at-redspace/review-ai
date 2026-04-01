@@ -19,6 +19,14 @@ export function ReviewStream({ maxHeight }: ReviewStreamProps) {
 
   // While exploring (no review text yet), show the accumulated file list.
   if (toolCall && !rawText) {
+    // border(2) + padding(2) + header(1) + marginTop(1) + marginBottom(1) = 7 chrome lines
+    const chrome = 7;
+    const listHeight = maxHeight ? Math.max(maxHeight - chrome, 1) : undefined;
+    const visibleFiles =
+      listHeight && exploredFiles.length > listHeight
+        ? exploredFiles.slice(-listHeight)
+        : exploredFiles;
+
     return (
       <Box
         flexDirection="column"
@@ -27,14 +35,16 @@ export function ReviewStream({ maxHeight }: ReviewStreamProps) {
         borderStyle="round"
         borderColor="cyan"
         padding={1}
+        height={maxHeight}
+        overflow="hidden"
       >
         <Text color="cyan" bold>
           Exploring dependencies ({exploredFiles.length} file
           {exploredFiles.length === 1 ? "" : "s"})
         </Text>
         <Box flexDirection="column" marginTop={1}>
-          {exploredFiles.map((file, i) => {
-            const isLast = i === exploredFiles.length - 1;
+          {visibleFiles.map((file, i) => {
+            const isLast = i === visibleFiles.length - 1;
             return (
               <Text key={i} color="gray">
                 {isLast ? "  reading " : "  read    "}

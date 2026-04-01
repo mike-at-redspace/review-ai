@@ -42,6 +42,7 @@ export const SEVERITY_EMOJI: Record<Severity, string> = {
 };
 
 export const MAX_REPO_MAP_FILES = 500;
+export const MAX_READ_FILE_LINES = 500;
 
 export const PROGRESS_SPINNER_LABELS: Record<string, string> = {
   session: "Creating Copilot session...",

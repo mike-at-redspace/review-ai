@@ -5,6 +5,7 @@ import type { ReviewConfig, ReviewProgressPhase } from "@core/config";
 import {
   COPILOT_CLIENT_STOP_TIMEOUT_MS,
   COPILOT_SESSION_TIMEOUT,
+  MAX_READ_FILE_LINES,
   MAX_REPO_MAP_FILES,
 } from "@core/config";
 import {
@@ -13,6 +14,7 @@ import {
   getEffectiveDiffLimit,
 } from "./prompt.js";
 import { selectModel } from "./modelSelector.js";
+import { truncateReadFileResult } from "./readFileResultTruncate.js";
 import { getSmartDiff, getRepositoryFileList } from "@core/git";
 
 export interface ReviewCallbacks {
@@ -115,6 +117,25 @@ export class ReviewGenerator {
       streaming: true,
       onPermissionRequest: approveAll,
       systemMessage: { mode: "replace", content: buildSystemPrompt(config) },
+      hooks: {
+        onPostToolUse: (input) => {
+          if (input.toolName !== "read_file") return;
+          const result = input.toolResult;
+          const raw = result?.textResultForLlm;
+          if (!raw) return;
+
+          const { text, truncated } = truncateReadFileResult(
+            raw,
+            input.toolArgs,
+            MAX_READ_FILE_LINES
+          );
+          if (!truncated) return;
+
+          return {
+            modifiedResult: { ...result, textResultForLlm: text },
+          };
+        },
+      },
       ...(this.options.workingDirectory
         ? { workingDirectory: this.options.workingDirectory }
         : {}),
