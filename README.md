@@ -2,8 +2,9 @@
 
 Review your local Git changes before you commit. Pick files, stream AI feedback, then chat to drill in and generate `PR-REVIEW.md`.
 
-<img width="45%" height="auto" alt="image" src="https://github.com/user-attachments/assets/1576e276-a01e-4426-b912-88ed5855e023" />
-<img width="45%" height="730" alt="image" src="https://github.com/user-attachments/assets/10ed8cc5-86a7-484d-a438-44d3dc8aa0ba" />
+| Choose Files | Feedback Loop |
+|------|-------|
+| <img src="https://github.com/user-attachments/assets/1576e276-a01e-4426-b912-88ed5855e023" width="100%"> | <img src="https://github.com/user-attachments/assets/10ed8cc5-86a7-484d-a438-44d3dc8aa0ba" width="100%"> |
 
 ## Requirements
 
