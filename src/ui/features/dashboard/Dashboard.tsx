@@ -35,6 +35,17 @@ interface DashboardProps {
   onError: (error: Error) => void;
 }
 
+/** Extract file path from raw SDK tool arguments JSON. */
+function parseFilePath(args?: string): string | undefined {
+  if (!args) return undefined;
+  try {
+    const { file_path, path } = JSON.parse(args);
+    return file_path ?? path;
+  } catch {
+    return args;
+  }
+}
+
 export function Dashboard({
   gitFiles,
   version,
@@ -46,23 +57,17 @@ export function Dashboard({
     type: "file-selection",
   });
   const { columns, rows } = useTerminalSize();
-  const terminalTooSmall =
-    columns < MIN_TERMINAL_COLUMNS || rows < MIN_TERMINAL_ROWS;
+
+  const tooSmall = columns < MIN_TERMINAL_COLUMNS || rows < MIN_TERMINAL_ROWS;
   const contentWidth = Math.max(columns - 4, 1);
   const contentHeight = Math.max(rows - 10, 5);
 
-  useEffect(() => {
-    return () => {
-      void generator.stop();
-    };
-  }, [generator]);
+  useEffect(() => () => void generator.stop(), [generator]);
 
   const handleFilesConfirmed = useCallback(
     async (selectedPaths: string[]) => {
-      const selectedFiles = gitFiles.filter((f) =>
-        selectedPaths.includes(f.path)
-      );
-      const combinedDiff = selectedFiles
+      const selected = gitFiles.filter((f) => selectedPaths.includes(f.path));
+      const combinedDiff = selected
         .filter((f) => !f.binary && f.diff)
         .map((f) => f.diff)
         .join("\n");
@@ -82,32 +87,19 @@ export function Dashboard({
           config,
           session.branch,
           undefined,
-          (chunk: string) => {
-            appendChunk(chunk);
-          },
-          (phase) => {
-            // Only clear active tool call when streaming resumes — keeps
-            // the last explored file visible during the exploring phase.
-            if (phase === "streaming") clearToolCall();
-            setViewState({ type: "reviewing", phase });
-          },
-          (toolName: string, args?: string) => {
-            let filePath: string | undefined;
-            if (args) {
-              try {
-                const parsed = JSON.parse(args);
-                filePath = parsed.file_path ?? parsed.path;
-              } catch {
-                filePath = args;
-              }
-            }
-            setToolCall(toolName, filePath);
+          {
+            onChunk: (chunk) => appendChunk(chunk),
+            onProgress: (phase) => {
+              if (phase === "streaming") clearToolCall();
+              setViewState({ type: "reviewing", phase });
+            },
+            onToolCall: (toolName, args) =>
+              setToolCall(toolName, parseFilePath(args) ?? toolName),
           }
         );
 
         finishStream();
-        const issues = parseReviewResponse(rawResponse);
-        updateSession({ issues });
+        updateSession({ issues: parseReviewResponse(rawResponse) });
         setViewState({ type: "review-complete" });
       } catch (err) {
         finishStream();
@@ -125,9 +117,7 @@ export function Dashboard({
       const markdown = generatePrReviewMarkdown(session, config);
       writeFileSync(config.outputPath, markdown, "utf-8");
       setViewState({ type: "done", outputPath: config.outputPath });
-      setTimeout(() => {
-        onComplete();
-      }, 1500);
+      setTimeout(onComplete, 1500);
     } catch (err) {
       setViewState({
         type: "error",
@@ -136,15 +126,16 @@ export function Dashboard({
     }
   }, [session, config, onComplete]);
 
-  const handleStartChat = useCallback(() => {
-    setViewState({ type: "chatting" });
-  }, []);
+  const handleStartChat = useCallback(
+    () => setViewState({ type: "chatting" }),
+    []
+  );
 
-  if (terminalTooSmall) {
+  if (tooSmall) {
     return (
       <Box flexDirection="column" padding={1}>
         <Text color="yellow">
-          Terminal too small. Please resize to at least {MIN_TERMINAL_COLUMNS}x
+          Terminal too small. Resize to at least {MIN_TERMINAL_COLUMNS}x
           {MIN_TERMINAL_ROWS}.
         </Text>
         <Text color="gray">Press Ctrl+C to exit.</Text>
@@ -183,7 +174,7 @@ export function Dashboard({
           <ProgressBar
             phase={viewState.phase}
             model={generator.selectedModel}
-            isGenerating={true}
+            isGenerating
           />
         </>
       )}
@@ -246,12 +237,8 @@ function ReviewCompleteInput({
   onDone: () => void;
 }) {
   useInput((input, key) => {
-    if (key.return) {
-      onChat();
-    }
-    if (input === "d" || input === "D") {
-      onDone();
-    }
+    if (key.return) onChat();
+    if (input.toLowerCase() === "d") onDone();
   });
   return (
     <Box paddingX={1}>

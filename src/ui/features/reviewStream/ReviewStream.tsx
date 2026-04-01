@@ -16,12 +16,9 @@ export function ReviewStream({ maxHeight }: ReviewStreamProps) {
   const isStreaming = useIsStreaming();
   const toolCall = useActiveToolCall();
   const exploredFiles = useExploredFiles();
-  const isExploring = toolCall !== undefined;
-  const borderColor = isStreaming ? "yellow" : "green";
 
-  // While exploring (no review text yet), show the file list.
-  // Once streaming text arrives, show the review output instead.
-  if (isExploring && !rawText) {
+  // While exploring (no review text yet), show the accumulated file list.
+  if (toolCall && !rawText) {
     return (
       <Box
         flexDirection="column"
@@ -33,25 +30,27 @@ export function ReviewStream({ maxHeight }: ReviewStreamProps) {
       >
         <Text color="cyan" bold>
           Exploring dependencies ({exploredFiles.length} file
-          {exploredFiles.length !== 1 ? "s" : ""})
+          {exploredFiles.length === 1 ? "" : "s"})
         </Text>
         <Box flexDirection="column" marginTop={1}>
-          {exploredFiles.map((file, i) => (
-            <Text key={i} color="gray">
-              {i === exploredFiles.length - 1 ? "  reading " : "  read    "}
-              {file}
-            </Text>
-          ))}
+          {exploredFiles.map((file, i) => {
+            const isLast = i === exploredFiles.length - 1;
+            return (
+              <Text key={i} color="gray">
+                {isLast ? "  reading " : "  read    "}
+                {file}
+              </Text>
+            );
+          })}
         </Box>
       </Box>
     );
   }
 
+  // Once streaming text arrives, show the review output.
   const lines = rawText.split("\n");
-  const visibleLines =
-    maxHeight && lines.length > maxHeight
-      ? lines.slice(lines.length - maxHeight)
-      : lines;
+  const visible =
+    maxHeight && lines.length > maxHeight ? lines.slice(-maxHeight) : lines;
 
   return (
     <Box
@@ -59,12 +58,12 @@ export function ReviewStream({ maxHeight }: ReviewStreamProps) {
       marginX={1}
       marginBottom={1}
       borderStyle="round"
-      borderColor={borderColor}
+      borderColor={isStreaming ? "yellow" : "green"}
       padding={1}
     >
       {rawText ? (
         <Box flexDirection="column">
-          {visibleLines.map((line, i) => (
+          {visible.map((line, i) => (
             <Text key={i}>{line}</Text>
           ))}
           {isStreaming && <Text color="yellow">_</Text>}

@@ -15,91 +15,93 @@ const SEVERITY_STYLES: Record<Severity, (text: string) => string> = {
   nitpick: chalk.gray,
 };
 
+/** Extract a human-readable file path from raw SDK tool arguments. */
+function parseToolFilePath(toolName: string, args?: string): string {
+  if (!args) return toolName;
+  try {
+    const { file_path, path } = JSON.parse(args);
+    return file_path ?? path ?? toolName;
+  } catch {
+    return args;
+  }
+}
+
 export class HumanSink implements OutputSink {
   private toolCallCount = 0;
 
-  progress(phase: ReviewProgressPhase): void {
+  progress(phase: ReviewProgressPhase) {
     const label = PROGRESS_STEP_LABELS[phase] ?? phase;
     process.stderr.write(chalk.gray(`  ${label}...\r`));
   }
 
-  toolCall(_toolName: string, args?: string): void {
+  toolCall(toolName: string, args?: string) {
     this.toolCallCount++;
-    let filePath = _toolName;
-    if (args) {
-      try {
-        const parsed = JSON.parse(args);
-        filePath = parsed.file_path ?? parsed.path ?? _toolName;
-      } catch {
-        filePath = args;
-      }
-    }
+    const file = parseToolFilePath(toolName, args);
     process.stderr.write(
-      chalk.cyan(`  reading ${filePath} (file ${this.toolCallCount})...\r`)
+      chalk.cyan(`  reading ${file} (file ${this.toolCallCount})...\r`)
     );
   }
 
-  chunk(text: string): void {
+  chunk(text: string) {
     process.stdout.write(text);
   }
 
-  issue(issue: ReviewIssue): void {
-    const style = SEVERITY_STYLES[issue.severity] ?? chalk.white;
-    console.log(style(`  [${issue.severity.toUpperCase()}] ${issue.title}`));
+  issue({ severity, title }: ReviewIssue) {
+    const style = SEVERITY_STYLES[severity] ?? chalk.white;
+    console.log(style(`  [${severity.toUpperCase()}] ${title}`));
   }
 
-  summary(session: ReviewSession): void {
-    const active = session.issues.filter((i) => !i.ignored);
+  summary({ issues, selectedFiles }: ReviewSession) {
+    const active = issues.filter((i) => !i.ignored).length;
     console.log(
       chalk.cyan(
-        `\n${active.length} issue(s) found across ${session.selectedFiles.length} file(s)`
+        `\n${active} issue(s) found across ${selectedFiles.length} file(s)`
       )
     );
   }
 
-  error(err: unknown): void {
+  error(err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
     console.error(chalk.red(`Error: ${message}`));
   }
 }
 
 export class JsonSink implements OutputSink {
-  private write(obj: Record<string, unknown>): void {
+  private emit(obj: Record<string, unknown>) {
     process.stdout.write(JSON.stringify(obj) + "\n");
   }
 
-  progress(phase: ReviewProgressPhase): void {
-    this.write({ type: "progress", phase });
+  progress(phase: ReviewProgressPhase) {
+    this.emit({ type: "progress", phase });
   }
 
-  toolCall(toolName: string, args?: string): void {
-    this.write({ type: "tool_call", tool: toolName, args });
+  toolCall(toolName: string, args?: string) {
+    this.emit({ type: "tool_call", tool: toolName, args });
   }
 
-  chunk(text: string): void {
-    this.write({ type: "chunk", text });
+  chunk(text: string) {
+    this.emit({ type: "chunk", text });
   }
 
-  issue(issue: ReviewIssue): void {
-    this.write({ type: "issue", ...issue });
+  issue(issue: ReviewIssue) {
+    this.emit({ type: "issue", ...issue });
   }
 
-  summary(session: ReviewSession): void {
-    this.write({
+  summary({ issues, selectedFiles, branch }: ReviewSession) {
+    this.emit({
       type: "summary",
-      totalIssues: session.issues.length,
-      activeIssues: session.issues.filter((i) => !i.ignored).length,
-      files: session.selectedFiles,
-      branch: session.branch,
+      totalIssues: issues.length,
+      activeIssues: issues.filter((i) => !i.ignored).length,
+      files: selectedFiles,
+      branch,
     });
   }
 
-  error(err: unknown): void {
+  error(err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
-    this.write({ type: "error", message });
+    this.emit({ type: "error", message });
   }
 }
 
-export function createSink(json: boolean): OutputSink {
-  return json ? new JsonSink() : new HumanSink();
-}
+export const createSink = (json: boolean): OutputSink =>
+  json ? new JsonSink() : new HumanSink();

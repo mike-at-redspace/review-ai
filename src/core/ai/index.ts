@@ -1,4 +1,8 @@
-export { ReviewGenerator, type ReviewGeneratorOptions } from "./reviewer.js";
+export {
+  ReviewGenerator,
+  type ReviewGeneratorOptions,
+  type ReviewCallbacks,
+} from "./reviewer.js";
 export { selectModel } from "./modelSelector.js";
 export {
   buildSystemPrompt,

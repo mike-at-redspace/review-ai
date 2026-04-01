@@ -14,7 +14,7 @@ import {
   buildRewritePrompt,
   parseReviewResponse,
 } from "@core/ai";
-import type { ChatCommand, ReviewProgressPhase } from "@core/config";
+import type { ChatCommand } from "@core/config";
 
 interface ChatLoopProps {
   onDone: () => void;
@@ -66,13 +66,9 @@ export function ChatLoop({ onDone, maxWidth, maxHeight }: ChatLoopProps) {
       setError(undefined);
 
       try {
-        const rawResponse = await generator.followUp(
-          prompt,
-          (chunk: string) => {
-            setStreamingText((prev) => prev + chunk);
-          },
-          (_phase: ReviewProgressPhase) => {}
-        );
+        const rawResponse = await generator.followUp(prompt, {
+          onChunk: (chunk) => setStreamingText((prev) => prev + chunk),
+        });
 
         addChatMessage({ role: "assistant", content: rawResponse });
 

@@ -1,6 +1,6 @@
 import { createStore, useStore } from "./store.js";
 
-interface ToolCallInfo {
+export interface ToolCallInfo {
   toolName: string;
   filePath?: string;
   /** Running count of tool calls in this review (1-indexed). */
@@ -11,74 +11,53 @@ interface StreamState {
   text: string;
   isStreaming: boolean;
   activeToolCall?: ToolCallInfo;
-  /** All files explored so far in this review. */
   exploredFiles: string[];
   toolCallCount: number;
 }
 
-export const streamStore = createStore<StreamState>({
+const INITIAL_STATE: StreamState = {
   text: "",
   isStreaming: false,
   exploredFiles: [],
   toolCallCount: 0,
-});
+};
 
-export function appendChunk(chunk: string): void {
+export const streamStore = createStore<StreamState>({ ...INITIAL_STATE });
+
+// --- Actions ---
+
+export const appendChunk = (chunk: string) =>
   streamStore.setState((s) => ({ ...s, text: s.text + chunk }));
-}
 
-export function startStream(): void {
-  streamStore.setState(() => ({
-    text: "",
-    isStreaming: true,
-    activeToolCall: undefined,
-    exploredFiles: [],
-    toolCallCount: 0,
-  }));
-}
+export const startStream = () =>
+  streamStore.setState(() => ({ ...INITIAL_STATE, isStreaming: true }));
 
-export function finishStream(): void {
+export const finishStream = () =>
   streamStore.setState((s) => ({
     ...s,
     isStreaming: false,
     activeToolCall: undefined,
   }));
-}
 
-export function setToolCall(toolName: string, filePath?: string): void {
+export const setToolCall = (toolName: string, filePath?: string) =>
   streamStore.setState((s) => {
     const callNumber = s.toolCallCount + 1;
-    const label = filePath ?? toolName;
     return {
       ...s,
       toolCallCount: callNumber,
       activeToolCall: { toolName, filePath, callNumber },
-      exploredFiles: [...s.exploredFiles, label],
+      exploredFiles: [...s.exploredFiles, filePath ?? toolName],
     };
   });
-}
 
-export function clearToolCall(): void {
+export const clearToolCall = () =>
   streamStore.setState((s) => ({ ...s, activeToolCall: undefined }));
-}
 
-const selectText = (s: StreamState) => s.text;
-const selectIsStreaming = (s: StreamState) => s.isStreaming;
-const selectToolCall = (s: StreamState) => s.activeToolCall;
-const selectExploredFiles = (s: StreamState) => s.exploredFiles;
+// --- Selectors ---
 
-export function useStreamText(): string {
-  return useStore(streamStore, selectText);
-}
-
-export function useIsStreaming(): boolean {
-  return useStore(streamStore, selectIsStreaming);
-}
-
-export function useActiveToolCall(): ToolCallInfo | undefined {
-  return useStore(streamStore, selectToolCall);
-}
-
-export function useExploredFiles(): string[] {
-  return useStore(streamStore, selectExploredFiles);
-}
+export const useStreamText = () => useStore(streamStore, (s) => s.text);
+export const useIsStreaming = () => useStore(streamStore, (s) => s.isStreaming);
+export const useActiveToolCall = () =>
+  useStore(streamStore, (s) => s.activeToolCall);
+export const useExploredFiles = () =>
+  useStore(streamStore, (s) => s.exploredFiles);

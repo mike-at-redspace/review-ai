@@ -5,91 +5,107 @@ import {
   MAX_REPO_MAP_FILES,
 } from "@core/config";
 
-export function getEffectiveDiffLimit(config: ReviewConfig): number {
-  const charLimit = config.maxDiffLength ?? MAX_DIFF_LENGTH;
-  const tokenLimit = config.maxDiffTokens;
-  if (tokenLimit === undefined) return charLimit;
-  const maxCharsFromTokens = Math.floor(tokenLimit * CHARS_PER_TOKEN);
-  return Math.min(charLimit, maxCharsFromTokens);
+export function getEffectiveDiffLimit({
+  maxDiffLength,
+  maxDiffTokens,
+}: ReviewConfig): number {
+  const charLimit = maxDiffLength ?? MAX_DIFF_LENGTH;
+  if (maxDiffTokens === undefined) return charLimit;
+  return Math.min(charLimit, Math.floor(maxDiffTokens * CHARS_PER_TOKEN));
 }
 
-// --- System Prompt Composition ---
+// --- System Prompt ---
 
-const BASE_SYSTEM_PROMPT = `You are a senior code reviewer performing a thorough review of uncommitted changes.
+const BASE_SYSTEM_PROMPT = `You are a Senior JavaScript/TypeScript Architect. You treat code as craft — readable over clever, more with less.
 
-Your mission: find real issues that matter — bugs, security holes, performance problems, and maintainability concerns. Skip trivial style nitpicks unless they indicate deeper problems.
+Mission: find bugs, security holes, performance traps, and architectural debt. Skip trivial nits unless they signal a deeper pattern.
 
-Review dimensions (in priority order):
-1. **Bugs & Correctness** — Logic errors, null/undefined risks, race conditions, edge cases
-2. **Security** — Injection, auth bypass, secrets exposure, unsafe deserialization
-3. **Performance** — N+1 queries, unnecessary re-renders, missing memoization, O(n²) in hot paths
-4. **Architecture** — Coupling, responsibility violations, missing abstractions, API design
-5. **Readability** — Unclear naming, missing context, overly complex logic
-6. **Code Smells** — Duplication, dead code, magic numbers, inconsistent patterns
+Review dimensions (priority order):
+1. Security — Audit for injection, auth bypass, and exposed secrets. Never trust external input.
+2. Bugs & Correctness — Trace edge cases, race conditions, and null/undefined risks. Ensure logic is resilient.
+3. Performance — Flag N+1 queries, O(n²) hot paths, and expensive re-renders. Optimize only where it matters.
+4. Architecture — Enforce separation of concerns. Flag tight coupling, leaky abstractions, and API contract violations.
+5. Clarity & Intent — Name by purpose, not type (no data/info suffixes). Flatten nested logic with guard clauses and ??.
+6. Craftsmanship — Eradicate "Magic Numbers" and "Swiss Army" functions. Replace primitive obsession with clean destructuring. If it’s not DRY and readable, it’s not finished.
 
-Output format — you MUST use EXACTLY this structure for each issue. Do not deviate from this format:
+Output format — use EXACTLY this structure per issue:
 
 ### [SEVERITY] Category: Title
 **File:** \`path/to/file\` (lines X-Y if applicable)
-**Description:** Clear explanation of the problem and why it matters.
-**Suggestion:** Concrete fix or improvement, with code snippet if helpful.
+**Description:** Why it matters.
+**Suggestion:** Concrete fix with code snippet.
 
 ---
 
-SEVERITY must be one of: CRITICAL, WARNING, INFO, NITPICK (in square brackets).
-Category must be one of: bug, security, performance, architecture, readability, smell, style, other.
-
-Example:
-### [WARNING] performance: Unbounded array concatenation in hot path
-**File:** \`src/core/processor.ts\` (lines 42-48)
-**Description:** ...
-**Suggestion:** ...
-
----
-
-Severity level definitions:
-- CRITICAL: Will cause bugs, data loss, or security vulnerabilities in production
-- WARNING: Likely to cause problems or significantly hinder maintainability
-- INFO: Worth improving but not urgent
-- NITPICK: Style or preference; mention only if pattern is widespread
+Severities: CRITICAL, WARNING, INFO, NITPICK (in brackets).
+Categories: bug, security, performance, architecture, readability, smell, style, other.
 
 Rules:
-- Assume the code compiles, passes linting, and tests pass unless the diff proves otherwise. Do not speculate that valid code is broken — if you are unsure whether a package or API exists, err on the side of trusting the author
-- Be specific: reference exact variable names, function calls, line patterns from the diff
-- Prioritize: put critical issues first
-- Be actionable: every issue should have a concrete suggestion
-- Be honest: if the code looks good, say so briefly and note any minor improvements
-- If the diff is truncated or you cannot see the full contents of a file, do NOT flag issues about code you cannot see. Only review what is visible. Do not hallucinate or guess about hidden content
-- Group related issues when they share a root cause
-- Do NOT wrap the entire response in markdown code fences
+- Trust the author — assume code compiles, types check, and tests pass unless the diff proves otherwise
+- Be specific: reference exact names, calls, line patterns from the diff
+- Be actionable: every issue gets a concrete suggestion
+- Prefer modern JS in suggestions: spread, destructuring, nullish coalescing, optional chaining
+- If the code looks good, say so briefly
+- Group related issues sharing a root cause
 
-You have access to a \`read_file\` tool that can read any file in the repository.
-When the diff references symbols, imports, interfaces, or dependencies defined in files outside the current diff view, use \`read_file\` to pull in that context before forming your review. This helps you avoid false positives and produce more accurate assessments.
-Do NOT read files speculatively or in bulk — only read a file when the diff specifically references something you need to verify.
-A repository file listing is provided in the user message so you know which files are available to read.`;
+How to use \`read_file\` — your most important tool:
+A repository file listing is provided in the user message. Use \`read_file\` liberally.
 
-function buildFocusSection(config: ReviewConfig): string {
-  if (config.focusCategories.length === 0) return "";
-  return `\n\nFocus especially on: ${config.focusCategories.join(", ")}`;
+Before you write a single issue, scan the diff for unknowns:
+- Imported symbols you haven't seen defined → read the source file
+- Function calls where you can't see the signature → read it
+- Types, interfaces, or constants referenced but not in the diff → read them
+- Changed function signatures → read every caller to check compatibility
+
+Do this FIRST, during your initial analysis pass. Don't wait until you're mid-sentence on an issue to realize you need context — front-load it. Reading 3-5 files before writing anything is normal and expected.
+
+The goal: by the time you write your review, you should have zero open questions about the code. Every claim should be grounded in code you have actually read, not inferred from a diff hunk.
+
+If after reading you still can't determine whether something is a problem, say so honestly and mark it INFO — never CRITICAL on incomplete evidence. Only use CRITICAL for issues you can prove from code you have read.
+
+TypeScript types are contracts. If a value comes from a typed parameter, the compiler enforces it — do not flag it as "potentially undefined." A diff that compiles is evidence.`;
+
+export function buildSystemPrompt({
+  focusCategories,
+  minSeverity,
+}: ReviewConfig): string {
+  const sections = [BASE_SYSTEM_PROMPT];
+
+  if (minSeverity !== "nitpick") {
+    const order = ["critical", "warning", "info", "nitpick"];
+    sections.push(
+      `Only report: ${order.slice(0, order.indexOf(minSeverity) + 1).join(", ")}`
+    );
+  }
+
+  if (focusCategories.length) {
+    sections.push(`Focus on: ${focusCategories.join(", ")}`);
+  }
+
+  return sections.join("\n\n");
 }
 
-function buildSeveritySection(config: ReviewConfig): string {
-  if (config.minSeverity === "nitpick") return "";
-  const severityOrder = ["critical", "warning", "info", "nitpick"];
-  const minIndex = severityOrder.indexOf(config.minSeverity);
-  const included = severityOrder.slice(0, minIndex + 1);
-  return `\n\nOnly report issues at severity: ${included.join(", ")}`;
-}
+// --- User Message ---
 
-export function buildSystemPrompt(config: ReviewConfig): string {
-  return (
-    BASE_SYSTEM_PROMPT +
-    buildSeveritySection(config) +
-    buildFocusSection(config)
-  );
-}
+function buildRepoMapSection(
+  repoFiles: string[],
+  config: ReviewConfig
+): string {
+  if (!repoFiles.length) return "";
 
-// --- User Message Assembly ---
+  const budget = Math.floor(getEffectiveDiffLimit(config) * 0.2);
+  let charCount = 0;
+  const visible = repoFiles
+    .filter((file) => {
+      charCount += file.length + 1;
+      return charCount <= budget;
+    })
+    .slice(0, MAX_REPO_MAP_FILES);
+
+  const omitted = repoFiles.length - visible.length;
+  const suffix = omitted > 0 ? `\n[...and ${omitted} more]` : "";
+  return `Repo files (${repoFiles.length} tracked):\n${visible.join("\n")}${suffix}`;
+}
 
 export function buildReviewPrompt(
   diff: string,
@@ -97,92 +113,52 @@ export function buildReviewPrompt(
   branch: string,
   stat?: string,
   wasTruncated?: boolean,
-  repoFiles?: string[]
+  repoFiles: string[] = []
 ): string {
-  let prompt = "";
+  const { minSeverity, focusCategories } = config;
+  const sections: string[] = [];
 
-  if (repoFiles && repoFiles.length > 0) {
-    // Budget: repo map should use at most 20% of the effective diff limit
-    // so it doesn't crowd out the actual diff content.
-    const charBudget = Math.floor(getEffectiveDiffLimit(config) * 0.2);
-    let charCount = 0;
-    let fileCount = 0;
-    for (const file of repoFiles) {
-      const added = file.length + 1; // +1 for newline
-      if (fileCount >= MAX_REPO_MAP_FILES || charCount + added > charBudget) {
-        break;
-      }
-      charCount += added;
-      fileCount++;
-    }
-    const filesToShow = repoFiles.slice(0, fileCount);
-    const omitted = repoFiles.length - fileCount;
-    prompt += `Repository files (${repoFiles.length} tracked files):\n`;
-    prompt += filesToShow.join("\n");
-    if (omitted > 0) {
-      prompt += `\n[...and ${omitted} more files]`;
-    }
-    prompt += "\n\n";
-  }
+  const repoMap = buildRepoMapSection(repoFiles, config);
+  if (repoMap) sections.push(repoMap);
 
-  if (stat) {
-    prompt += `File change summary:\n${stat}\n\n`;
-  }
+  if (stat) sections.push(`Summary:\n${stat}`);
 
-  prompt += `Review the following uncommitted changes:\n\n${diff}`;
-
-  if (wasTruncated) {
-    prompt +=
-      "\n\n[Note: Diff was truncated due to size. Review visible changes and note that coverage is partial.]";
-  }
-
-  prompt += `\n\nBranch: ${branch}`;
+  const truncNote = wasTruncated ? "\n\n[Note: Diff truncated]" : "";
+  sections.push(
+    `Changes to review (branch: ${branch}):\n\n${diff}${truncNote}`
+  );
 
   const instructions: string[] = [];
-
-  if (config.minSeverity !== "nitpick") {
-    const severityOrder = ["critical", "warning", "info", "nitpick"];
-    const minIndex = severityOrder.indexOf(config.minSeverity);
-    const included = severityOrder.slice(0, minIndex + 1);
-    instructions.push(`Only report issues at severity: ${included.join(", ")}`);
-  }
-
-  if (config.focusCategories.length > 0) {
+  if (minSeverity !== "nitpick") {
+    const order = ["critical", "warning", "info", "nitpick"];
     instructions.push(
-      `Focus especially on: ${config.focusCategories.join(", ")}`
+      `Only report: ${order.slice(0, order.indexOf(minSeverity) + 1).join(", ")}`
+    );
+  }
+  if (focusCategories.length) {
+    instructions.push(`Focus on: ${focusCategories.join(", ")}`);
+  }
+  if (instructions.length) {
+    sections.push(
+      `Instructions:\n${instructions.map((i) => `- ${i}`).join("\n")}`
     );
   }
 
-  if (instructions.length > 0) {
-    prompt += `\n\nReview instructions:\n${instructions.map((i) => `- ${i}`).join("\n")}`;
-  }
-
-  return prompt;
+  return sections.join("\n\n");
 }
 
-export function buildExpandPrompt(issue: ReviewIssue): string {
-  return `Expand on issue #${issue.id}: "${issue.title}" in \`${issue.file}\`.
+// --- Follow-up Prompts ---
 
-Provide:
-1. A more detailed explanation of why this is a problem
-2. The specific impact if left unfixed
-3. A complete code fix (show the before and after)
-4. Any related patterns in the codebase that might have the same issue`;
+export function buildExpandPrompt({ id, title, file }: ReviewIssue): string {
+  return `Deep dive into issue #${id}: "${title}" in \`${file}\`.
+Provide: detailed impact, before/after code fix, and codebase-wide patterns.`;
 }
 
 export function buildFocusPrompt(area: string): string {
-  return `Re-examine the changes with a specific focus on **${area}**.
-
-Look for issues you may have missed in your initial review that relate to ${area}. Reference specific code from the diff. Use the same output format (### [SEVERITY] Category: Title).`;
+  return `Re-examine changes focusing on **${area}**. Use the standard format.`;
 }
 
-export function buildRewritePrompt(issue: ReviewIssue): string {
-  return `For issue #${issue.id}: "${issue.title}" in \`${issue.file}\`:
-
-Provide a complete rewritten version of the affected code that fixes this issue. Show:
-1. The current problematic code (from the diff)
-2. The improved version
-3. Brief explanation of what changed and why
-
-Output the code in fenced blocks with the appropriate language tag.`;
+export function buildRewritePrompt({ id, title, file }: ReviewIssue): string {
+  return `Rewrite code for issue #${id} ("${title}" in \`${file}\`).
+Show current vs. improved. Prioritize readability and modern JS/TS idioms.`;
 }

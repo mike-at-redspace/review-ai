@@ -13,19 +13,38 @@ import {
 import { selectModel } from "./modelSelector.js";
 import { getSmartDiff, getRepositoryFileList } from "@core/git";
 
+export interface ReviewCallbacks {
+  onChunk?: (chunk: string) => void;
+  onProgress?: (phase: ReviewProgressPhase) => void;
+  onToolCall?: (toolName: string, args?: string) => void;
+  onToolComplete?: () => void;
+}
+
 export interface ReviewGeneratorOptions {
   /** Git repo root; Copilot tool paths resolve relative to this directory. */
   workingDirectory?: string;
 }
 
+/** Safely coerce SDK tool arguments to a string (or undefined). */
+function stringifyArgs(args: unknown): string | undefined {
+  if (args === undefined) return undefined;
+  if (typeof args === "string") return args;
+  try {
+    return JSON.stringify(args);
+  } catch {
+    return String(args);
+  }
+}
+
+type Session = Awaited<ReturnType<CopilotClient["createSession"]>>;
+
 export class ReviewGenerator {
-  private session: Awaited<ReturnType<CopilotClient["createSession"]>> | null =
-    null;
+  private session: Session | null = null;
   public selectedModel: string | null = null;
 
   constructor(
     private client: CopilotClient,
-    private readonly generatorOptions: ReviewGeneratorOptions = {}
+    private readonly options: ReviewGeneratorOptions = {}
   ) {}
 
   async review(
@@ -33,10 +52,7 @@ export class ReviewGenerator {
     config: ReviewConfig,
     branch: string,
     stat?: string,
-    onChunk?: (chunk: string) => void,
-    onProgress?: (phase: ReviewProgressPhase) => void,
-    onToolCall?: (toolName: string, args?: string) => void,
-    onToolComplete?: () => void
+    callbacks: ReviewCallbacks = {}
   ): Promise<string> {
     const effectiveLimit = getEffectiveDiffLimit(config);
     let wasTruncated = false;
@@ -44,8 +60,7 @@ export class ReviewGenerator {
 
     if (diff.length > effectiveLimit) {
       const result = getSmartDiff(diff, stat, config, effectiveLimit);
-      content = result.content;
-      wasTruncated = result.wasTruncated;
+      ({ content, wasTruncated } = result);
     }
 
     const repoFiles =
@@ -65,101 +80,71 @@ export class ReviewGenerator {
     const model = selectModel(content, config);
     this.selectedModel = model;
 
-    onProgress?.("session");
+    callbacks.onProgress?.("session");
     this.session = await this.client.createSession({
       clientName: "review-ai",
       model,
       streaming: true,
       onPermissionRequest: approveAll,
-      systemMessage: {
-        mode: "replace",
-        content: buildSystemPrompt(config),
-      },
-      ...(this.generatorOptions.workingDirectory
-        ? { workingDirectory: this.generatorOptions.workingDirectory }
+      systemMessage: { mode: "replace", content: buildSystemPrompt(config) },
+      ...(this.options.workingDirectory
+        ? { workingDirectory: this.options.workingDirectory }
         : {}),
     });
 
-    return this.runWithSession(
-      this.session,
-      prompt,
-      onChunk,
-      onProgress,
-      onToolCall,
-      onToolComplete
-    );
+    return this.runWithSession(this.session, prompt, callbacks);
   }
 
   async followUp(
     prompt: string,
-    onChunk?: (chunk: string) => void,
-    onProgress?: (phase: ReviewProgressPhase) => void,
-    onToolCall?: (toolName: string, args?: string) => void,
-    onToolComplete?: () => void
+    callbacks: ReviewCallbacks = {}
   ): Promise<string> {
     if (!this.session) {
       throw new Error("No active review session. Call review() first.");
     }
-    return this.runWithSession(
-      this.session,
-      prompt,
-      onChunk,
-      onProgress,
-      onToolCall,
-      onToolComplete
-    );
+    return this.runWithSession(this.session, prompt, callbacks);
   }
 
   private async runWithSession(
-    session: Awaited<ReturnType<CopilotClient["createSession"]>>,
+    session: Session,
     prompt: string,
-    onChunk?: (chunk: string) => void,
-    onProgress?: (phase: ReviewProgressPhase) => void,
-    onToolCall?: (toolName: string, args?: string) => void,
-    onToolComplete?: () => void
+    { onChunk, onProgress, onToolCall, onToolComplete }: ReviewCallbacks
   ): Promise<string> {
     let fullRawMessage = "";
     let hasReportedStreaming = false;
 
     const unsubscribe = session.on((event) => {
-      const data = event.data as
-        | {
-            deltaContent?: string;
-            content?: string;
-            toolName?: string;
-            arguments?: string;
+      const { type, data } = event as {
+        type: string;
+        data?: Record<string, unknown>;
+      };
+
+      switch (type) {
+        case "assistant.message_delta": {
+          const delta = data?.deltaContent as string | undefined;
+          if (!delta) break;
+          if (!hasReportedStreaming) {
+            hasReportedStreaming = true;
+            onProgress?.("streaming");
           }
-        | undefined;
-      if (event.type === "assistant.message_delta" && data?.deltaContent) {
-        if (!hasReportedStreaming) {
-          hasReportedStreaming = true;
-          onProgress?.("streaming");
+          fullRawMessage += delta;
+          onChunk?.(delta);
+          break;
         }
-        const chunk = data.deltaContent;
-        fullRawMessage += chunk;
-        onChunk?.(chunk);
-      } else if (event.type === "assistant.message" && data?.content) {
-        if (!fullRawMessage) {
-          fullRawMessage = data.content;
-        }
-      } else if (event.type === "tool.execution_start" && data?.toolName) {
-        onProgress?.("exploring");
-        let toolArgs: string | undefined;
-        try {
-          toolArgs =
-            data.arguments === undefined
-              ? undefined
-              : typeof data.arguments === "string"
-                ? data.arguments
-                : JSON.stringify(data.arguments);
-        } catch {
-          toolArgs = String(data.arguments);
-        }
-        onToolCall?.(data.toolName, toolArgs);
-        // Reset so we re-report streaming when text generation resumes
-        hasReportedStreaming = false;
-      } else if (event.type === "tool.execution_complete") {
-        onToolComplete?.();
+        case "assistant.message":
+          if (!fullRawMessage && data?.content) {
+            fullRawMessage = data.content as string;
+          }
+          break;
+        case "tool.execution_start":
+          if (!data?.toolName) break;
+          onProgress?.("exploring");
+          onToolCall?.(data.toolName as string, stringifyArgs(data.arguments));
+          hasReportedStreaming = false; // re-report when text resumes
+          break;
+        case "tool.execution_complete":
+          onToolComplete?.();
+          break;
       }
     });
 
@@ -177,44 +162,40 @@ export class ReviewGenerator {
     }
 
     const rawMessage = fullRawMessage.trim();
-    if (!rawMessage) {
-      throw new Error("No response received from Copilot");
-    }
+    if (!rawMessage) throw new Error("No response received from Copilot");
     return rawMessage;
   }
 
-  /**
-   * Disconnects the Copilot session and stops the client. Returns cleanup errors
-   * (e.g. from {@link CopilotClient.stop}); empty if everything succeeded.
-   */
+  /** Disconnect session and stop client. Returns any cleanup errors. */
   async stop(): Promise<Error[]> {
     const errors: Error[] = [];
-    try {
-      if (this.session) {
-        try {
-          await this.session.disconnect();
-        } catch (e) {
-          errors.push(e instanceof Error ? e : new Error(String(e)));
-        }
-        this.session = null;
-      }
-      try {
-        const stopErrors = await Promise.race([
-          this.client.stop(),
-          new Promise<never>((_, reject) =>
-            setTimeout(
-              () => reject(new Error("Stop timeout")),
-              COPILOT_CLIENT_STOP_TIMEOUT_MS
-            )
-          ),
-        ]);
-        errors.push(...stopErrors);
-      } catch (e) {
-        errors.push(e instanceof Error ? e : new Error(String(e)));
-      }
-    } catch (e) {
+    const collect = (e: unknown) =>
       errors.push(e instanceof Error ? e : new Error(String(e)));
+
+    if (this.session) {
+      try {
+        await this.session.disconnect();
+      } catch (e) {
+        collect(e);
+      }
+      this.session = null;
     }
+
+    try {
+      const stopErrors = await Promise.race([
+        this.client.stop(),
+        new Promise<never>((_, reject) =>
+          setTimeout(
+            () => reject(new Error("Stop timeout")),
+            COPILOT_CLIENT_STOP_TIMEOUT_MS
+          )
+        ),
+      ]);
+      errors.push(...stopErrors);
+    } catch (e) {
+      collect(e);
+    }
+
     return errors;
   }
 }

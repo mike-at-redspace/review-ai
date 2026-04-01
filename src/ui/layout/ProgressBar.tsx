@@ -5,31 +5,29 @@ import {
   type ReviewProgressPhase,
 } from "@core/config";
 import { useActiveToolCall } from "@core/streamStore";
+import type { ToolCallInfo } from "@core/streamStore";
 import { useAnimationFrame } from "@ui/hooks";
 
 const SPINNER_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
 const SPINNER_INTERVAL_MS = 80;
 
-const PHASES_WITH_MODEL: ReviewProgressPhase[] = [
+const PHASES_WITH_MODEL = new Set<ReviewProgressPhase>([
   "session",
   "sending",
   "streaming",
   "exploring",
-];
+]);
 
 function spinnerLabel(
   phase: ReviewProgressPhase,
   model?: string | null,
-  toolCall?: { toolName: string; filePath?: string; callNumber: number }
+  toolCall?: ToolCallInfo
 ): string {
   if (phase === "exploring" && toolCall) {
-    const target = toolCall.filePath ?? toolCall.toolName;
-    return `Reading ${target} (file ${toolCall.callNumber})...`;
+    return `Reading ${toolCall.filePath ?? toolCall.toolName} (file ${toolCall.callNumber})...`;
   }
   const base = PROGRESS_SPINNER_LABELS[phase] ?? phase;
-  if (!model?.trim() || !PHASES_WITH_MODEL.includes(phase)) {
-    return base;
-  }
+  if (!model?.trim() || !PHASES_WITH_MODEL.has(phase)) return base;
   return base.replace(/\.\.\.$/, ` (${model})...`);
 }
 
@@ -41,7 +39,6 @@ function AnimatedSpinner() {
 
 interface ProgressBarProps {
   phase?: ReviewProgressPhase;
-  /** Copilot model id (shown during session / send / stream). */
   model?: string | null;
   isGenerating: boolean;
   error?: string;
@@ -66,11 +63,13 @@ export function ProgressBar({
   }
 
   if (isGenerating && phase) {
-    const label = spinnerLabel(phase, model, toolCall);
     return (
       <Box paddingX={1} marginTop={1}>
         <AnimatedSpinner />
-        <Text color={phase === "exploring" ? "cyan" : "gray"}> {label}</Text>
+        <Text color={phase === "exploring" ? "cyan" : "gray"}>
+          {" "}
+          {spinnerLabel(phase, model, toolCall)}
+        </Text>
       </Box>
     );
   }

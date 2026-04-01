@@ -290,16 +290,15 @@ async function main(): Promise<void> {
           config,
           changes.branch,
           changes.stat,
-          (chunk: string) => sink.chunk(chunk),
-          (phase: ReviewProgressPhase) => {
-            progressRef.current = phase;
-            sink.progress(phase);
-          },
-          (toolName: string, args?: string) => {
-            sink.toolCall(toolName, args);
-          },
-          () => {
-            sink.progress(progressRef.current as ReviewProgressPhase);
+          {
+            onChunk: (chunk) => sink.chunk(chunk),
+            onProgress: (phase) => {
+              progressRef.current = phase;
+              sink.progress(phase);
+            },
+            onToolCall: (toolName, args) => sink.toolCall(toolName, args),
+            onToolComplete: () =>
+              sink.progress(progressRef.current as ReviewProgressPhase),
           }
         );
 
