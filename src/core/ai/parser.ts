@@ -1,4 +1,4 @@
-import type { ReviewIssue, Severity, ReviewCategory } from "@core/config";
+import type { ReviewCategory, ReviewIssue, Severity } from "@core/config";
 
 const ISSUE_HEADER_REGEX = /^###\s*\[(\w+)\]\s*(\w+):\s*(.+)$/;
 const ISSUE_HEADER_ALT_REGEX = /^###\s+(\w+):\s*(.+)$/;

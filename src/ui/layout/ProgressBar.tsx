@@ -1,8 +1,10 @@
 import React from "react";
 import { Box, Text } from "ink";
-import type { ReviewProgressPhase } from "@core/config";
-import { PROGRESS_SPINNER_LABELS } from "@core/config";
-import { useAnimationFrame } from "@ui/hooks/useClock";
+import {
+  PROGRESS_SPINNER_LABELS,
+  type ReviewProgressPhase,
+} from "@core/config";
+import { useAnimationFrame } from "@ui/hooks";
 
 const SPINNER_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
 const SPINNER_INTERVAL_MS = 80;

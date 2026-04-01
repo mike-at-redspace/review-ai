@@ -1,7 +1,7 @@
 import React from "react";
 import { Box, Text } from "ink";
 import { LOGO_ANIMATION_COLORS, LOGO_LINES, VERSION } from "@core/config";
-import { useLogoAnimation } from "@ui/hooks/useLogoAnimation";
+import { useLogoAnimation } from "@ui/hooks";
 import { Byline } from "./Byline.js";
 
 const BRANCH_MAX_LENGTH = 25;

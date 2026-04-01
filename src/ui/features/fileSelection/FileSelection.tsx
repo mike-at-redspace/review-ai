@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useMemo } from "react";
+import React, { useCallback, useMemo, useState } from "react";
 import { Box, Text, useInput } from "ink";
 import type { ChangedFile } from "@core/config";
 

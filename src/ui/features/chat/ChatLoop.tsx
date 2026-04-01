@@ -1,13 +1,13 @@
-import React, { useState, useCallback } from "react";
+import React, { useCallback, useState } from "react";
 import { Box, Text } from "ink";
 import {
   ChatInput,
   ChatMessage,
-  StreamingResponse,
-  IssueSummaryBar,
   IssueList,
+  IssueSummaryBar,
+  StreamingResponse,
 } from "@ui/layout";
-import { useReviewContext } from "@ui/context/ReviewContext";
+import { useReviewContext } from "@ui/context";
 import {
   buildExpandPrompt,
   buildFocusPrompt,

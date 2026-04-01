@@ -1,9 +1,9 @@
-import { CopilotClient, approveAll } from "@github/copilot-sdk";
+import { approveAll, CopilotClient } from "@github/copilot-sdk";
 import type { ReviewConfig, ReviewProgressPhase } from "@core/config";
 import { COPILOT_SESSION_TIMEOUT } from "@core/config";
 import {
-  buildSystemPrompt,
   buildReviewPrompt,
+  buildSystemPrompt,
   getEffectiveDiffLimit,
 } from "./prompt.js";
 import { selectModel } from "./modelSelector.js";

@@ -1,4 +1,4 @@
-import type { ReviewSession, ReviewConfig, Severity } from "@core/config";
+import type { ReviewConfig, ReviewSession, Severity } from "@core/config";
 import { SEVERITY_EMOJI, VERSION } from "@core/config";
 
 function countBySeverity(

@@ -3,26 +3,26 @@
 import { program } from "commander";
 import chalk from "chalk";
 import { CopilotClient } from "@github/copilot-sdk";
-import { loadConfig, getConfigTemplate } from "@core/config";
-import { isGitRepository, getAllChanges } from "@core/git";
+import { getConfigTemplate, loadConfig } from "@core/config";
+import { getAllChanges, isGitRepository } from "@core/git";
 import {
-  ReviewGenerator,
-  parseReviewResponse,
   generatePrReviewMarkdown,
+  parseReviewResponse,
+  ReviewGenerator,
 } from "@core/ai";
 import type {
-  ReviewConfig,
-  ReviewSession,
-  ReviewProgressPhase,
-  Severity,
   ReviewCategory,
+  ReviewConfig,
+  ReviewProgressPhase,
+  ReviewSession,
+  Severity,
 } from "@core/config";
 import {
-  PROGRESS_STEP_LABELS,
-  VERSION,
   INITIAL_PROGRESS_PHASE,
   MIN_TERMINAL_COLUMNS,
   MIN_TERMINAL_ROWS,
+  PROGRESS_STEP_LABELS,
+  VERSION,
 } from "@core/config";
 import { createSink } from "@core/outputSink";
 import { writeFileSync } from "fs";

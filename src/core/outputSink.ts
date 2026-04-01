@@ -2,8 +2,8 @@ import chalk from "chalk";
 import type {
   OutputSink,
   ReviewIssue,
-  ReviewSession,
   ReviewProgressPhase,
+  ReviewSession,
   Severity,
 } from "@core/config";
 import { PROGRESS_STEP_LABELS } from "@core/config";

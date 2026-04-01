@@ -1,8 +1,8 @@
 import { spawn } from "child_process";
 import type { ChangedFile, GitChanges, GitExecutor } from "@core/config";
 import {
-  MAX_GIT_BUFFER_SIZE,
   DEFAULT_RECENT_COMMITS_COUNT,
+  MAX_GIT_BUFFER_SIZE,
 } from "@core/config";
 
 let executor: GitExecutor = defaultExecutor;

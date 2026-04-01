@@ -1,6 +1,6 @@
 import React from "react";
 import { Box, Text } from "ink";
-import { useStreamText, useIsStreaming } from "@core/streamStore";
+import { useIsStreaming, useStreamText } from "@core/streamStore";
 
 interface ReviewStreamProps {
   maxHeight?: number;

@@ -1,21 +1,25 @@
-import React, { useState, useCallback, useEffect } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import { Box, Text, useInput } from "ink";
 import {
-  Header,
-  ProgressBar,
-  IssueSummaryBar,
-  IssueList,
   Divider,
+  Header,
+  IssueList,
+  IssueSummaryBar,
+  ProgressBar,
 } from "@ui/layout";
 import { FileSelection } from "@ui/features/fileSelection";
 import { ReviewStream } from "@ui/features/reviewStream";
 import { ChatLoop } from "@ui/features/chat";
-import { useReviewContext } from "@ui/context/ReviewContext";
-import { useTerminalSize } from "@ui/hooks/useTerminalSize";
-import { parseReviewResponse, generatePrReviewMarkdown } from "@core/ai";
-import { appendChunk, startStream, finishStream } from "@core/streamStore";
-import type { ViewState, ChangedFile } from "@core/config";
-import { MIN_TERMINAL_COLUMNS, MIN_TERMINAL_ROWS } from "@core/config";
+import { useReviewContext } from "@ui/context";
+import { useTerminalSize } from "@ui/hooks";
+import { generatePrReviewMarkdown, parseReviewResponse } from "@core/ai";
+import { appendChunk, finishStream, startStream } from "@core/streamStore";
+import {
+  type ChangedFile,
+  MIN_TERMINAL_COLUMNS,
+  MIN_TERMINAL_ROWS,
+  type ViewState,
+} from "@core/config";
 import { writeFileSync } from "fs";
 
 interface DashboardProps {
