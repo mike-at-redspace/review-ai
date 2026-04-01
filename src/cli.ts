@@ -44,6 +44,7 @@ interface CliOptions {
   yes?: boolean;
   chat?: boolean;
   importCollapse?: boolean;
+  repoMap?: boolean;
   json?: boolean;
 }
 
@@ -117,6 +118,9 @@ function applyOptionOverrides(options: CliOptions, config: ReviewConfig): void {
   if (options.importCollapse === false) {
     config.importCollapse = false;
   }
+  if (options.repoMap === false) {
+    config.includeRepoMap = false;
+  }
 }
 
 async function main(): Promise<void> {
@@ -155,6 +159,7 @@ async function main(): Promise<void> {
     )
     .option("--max-diff-tokens <n>", "Max diff size in estimated tokens")
     .option("--no-import-collapse", "Disable import line collapsing")
+    .option("--no-repo-map", "Disable repository file map in prompt")
     .option("-v, --verbose", "Show verbose output")
     .option(
       "-y, --yes",
@@ -289,6 +294,12 @@ async function main(): Promise<void> {
           (phase: ReviewProgressPhase) => {
             progressRef.current = phase;
             sink.progress(phase);
+          },
+          (toolName: string, args?: string) => {
+            sink.toolCall(toolName, args);
+          },
+          () => {
+            sink.progress(progressRef.current as ReviewProgressPhase);
           }
         );
 

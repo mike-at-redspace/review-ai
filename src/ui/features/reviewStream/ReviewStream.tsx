@@ -1,6 +1,11 @@
 import React from "react";
 import { Box, Text } from "ink";
-import { useIsStreaming, useStreamText } from "@core/streamStore";
+import {
+  useActiveToolCall,
+  useExploredFiles,
+  useIsStreaming,
+  useStreamText,
+} from "@core/streamStore";
 
 interface ReviewStreamProps {
   maxHeight?: number;
@@ -9,7 +14,39 @@ interface ReviewStreamProps {
 export function ReviewStream({ maxHeight }: ReviewStreamProps) {
   const rawText = useStreamText();
   const isStreaming = useIsStreaming();
+  const toolCall = useActiveToolCall();
+  const exploredFiles = useExploredFiles();
+  const isExploring = toolCall !== undefined;
   const borderColor = isStreaming ? "yellow" : "green";
+
+  // While exploring (no review text yet), show the file list.
+  // Once streaming text arrives, show the review output instead.
+  if (isExploring && !rawText) {
+    return (
+      <Box
+        flexDirection="column"
+        marginX={1}
+        marginBottom={1}
+        borderStyle="round"
+        borderColor="cyan"
+        padding={1}
+      >
+        <Text color="cyan" bold>
+          Exploring dependencies ({exploredFiles.length} file
+          {exploredFiles.length !== 1 ? "s" : ""})
+        </Text>
+        <Box flexDirection="column" marginTop={1}>
+          {exploredFiles.map((file, i) => (
+            <Text key={i} color="gray">
+              {i === exploredFiles.length - 1 ? "  reading " : "  read    "}
+              {file}
+            </Text>
+          ))}
+        </Box>
+      </Box>
+    );
+  }
+
   const lines = rawText.split("\n");
   const visibleLines =
     maxHeight && lines.length > maxHeight

@@ -21,6 +21,16 @@
   - Feature flows in `src/ui/features/`
   - Layout primitives in `src/ui/layout/`
 
+## Key Patterns
+
+- **Copilot SDK**: Sessions via `@github/copilot-sdk`. `CopilotClient.createSession()` with `onPermissionRequest: approveAll` enables tool use. `session.sendAndWait()` handles multi-turn tool calls internally. Event types: `assistant.message_delta`, `assistant.message`, `tool.execution_start` (data: `toolName`, `arguments`), `tool.execution_complete` (data: `toolName`, `success`, `result`).
+- **Path aliases**: `@core/*` = `src/core/*`, `@ui/*` = `src/ui/*`. Resolved by `tsc-alias` post-build.
+- **State management**: Custom `createStore`/`useStore` (pub-sub with `useSyncExternalStore`) in `src/core/store.ts`. Stream state in `src/core/streamStore.ts`. No Redux/Zustand.
+- **Progress phases**: `ReviewProgressPhase` in `types.ts` drives both the interactive `ProgressBar` and non-interactive `OutputSink`. Adding a phase requires updating: the union type, `PROGRESS_SPINNER_LABELS`, `PROGRESS_STEP_LABELS`, and both sinks.
+- **OutputSink interface**: All methods must be implemented on both `HumanSink` (stderr/stdout) and `JsonSink` (NDJSON). Adding a method to the interface without implementing on both sinks will break the build.
+- **Prompt assembly**: System prompt in `BASE_SYSTEM_PROMPT` (prompt.ts). User message built by `buildReviewPrompt()`. The model's output format (`### [SEVERITY] Category: Title`) is parsed by `parser.ts` — don't change the format instructions without updating the parser regex.
+- **Git executor**: All git commands go through a pluggable `GitExecutor` (git.ts) — don't shell out directly. This enables test mocking.
+
 ## Run and Verify
 
 - Install: `pnpm install`
@@ -28,6 +38,8 @@
 - Build: `pnpm run build`
 - Test: `pnpm test`
 - Lint: `pnpm run lint`
+- Format: `pnpm run format`
+- Full check: `pnpm run build && pnpm run lint && npx prettier --check "src/**/*.{ts,tsx}" && pnpm test`
 
 ## Canonical External Reference (Context7)
 

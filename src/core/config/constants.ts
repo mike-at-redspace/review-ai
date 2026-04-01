@@ -5,7 +5,7 @@ export const CONFIG_FILENAME = ".review-ai.json";
 export const MAX_GIT_BUFFER_SIZE = 10 * 1024 * 1024;
 export const MAX_DIFF_LENGTH = 8000;
 export const CHARS_PER_TOKEN = 3.5;
-export const COPILOT_SESSION_TIMEOUT = 120000;
+export const COPILOT_SESSION_TIMEOUT = 180000;
 export const COPILOT_CLIENT_STOP_TIMEOUT_MS = 5000;
 export const DEFAULT_COPILOT_MODEL = "auto";
 export const DEFAULT_PREMIUM_MODEL = "gpt-5.3-codex";
@@ -41,10 +41,13 @@ export const SEVERITY_EMOJI: Record<Severity, string> = {
   nitpick: "\u{26AA}",
 };
 
+export const MAX_REPO_MAP_FILES = 500;
+
 export const PROGRESS_SPINNER_LABELS: Record<string, string> = {
   session: "Creating Copilot session...",
   sending: "Sending diff to Copilot...",
   streaming: "Reviewing code...",
+  exploring: "Exploring repository files...",
   parsing: "Parsing review results...",
 };
 
@@ -53,6 +56,7 @@ export const PROGRESS_STEP_LABELS: Record<string, string> = {
   session: "creating Copilot session",
   sending: "sending diff",
   streaming: "reviewing code",
+  exploring: "reading repository files",
   parsing: "parsing results",
 };
 

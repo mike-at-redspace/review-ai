@@ -91,6 +91,17 @@ export async function getRecentCommits(
   }
 }
 
+export async function getRepositoryFileList(limit?: number): Promise<string[]> {
+  try {
+    const cmd =
+      limit !== undefined ? `git ls-files | head -n ${limit}` : "git ls-files";
+    const output = await executor(cmd);
+    return output.trim().split("\n").filter(Boolean);
+  } catch {
+    return [];
+  }
+}
+
 const BINARY_EXTENSIONS = new Set([
   ".png",
   ".jpg",

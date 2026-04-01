@@ -13,7 +13,13 @@ import { ChatLoop } from "@ui/features/chat";
 import { useReviewContext } from "@ui/context";
 import { useTerminalSize } from "@ui/hooks";
 import { generatePrReviewMarkdown, parseReviewResponse } from "@core/ai";
-import { appendChunk, finishStream, startStream } from "@core/streamStore";
+import {
+  appendChunk,
+  clearToolCall,
+  finishStream,
+  setToolCall,
+  startStream,
+} from "@core/streamStore";
 import {
   type ChangedFile,
   MIN_TERMINAL_COLUMNS,
@@ -80,7 +86,22 @@ export function Dashboard({
             appendChunk(chunk);
           },
           (phase) => {
+            // Only clear active tool call when streaming resumes — keeps
+            // the last explored file visible during the exploring phase.
+            if (phase === "streaming") clearToolCall();
             setViewState({ type: "reviewing", phase });
+          },
+          (toolName: string, args?: string) => {
+            let filePath: string | undefined;
+            if (args) {
+              try {
+                const parsed = JSON.parse(args);
+                filePath = parsed.file_path ?? parsed.path;
+              } catch {
+                filePath = args;
+              }
+            }
+            setToolCall(toolName, filePath);
           }
         );
 

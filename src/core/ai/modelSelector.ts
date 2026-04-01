@@ -8,9 +8,9 @@ interface ModelTier {
 
 // Available Copilot models ordered by context size ascending.
 // At each tier we pick the best quality-per-cost model:
-//   - gpt-5-mini      (192K, 0x cost)  — fast & free for small diffs
-//   - gpt-5.1-codex   (256K, 1x cost)  — codex quality for medium diffs
-//   - gpt-5.3-codex   (400K, 1x cost)  — full codex for large diffs
+//   - gpt-5-mini      (192K, 0.33x cost) — fast & cheap for small diffs
+//   - gpt-5.1-codex   (256K, 1x cost)    — codex quality for medium diffs
+//   - gpt-5.3-codex   (400K, 1x cost)    — full codex for large diffs
 const MODEL_TIERS: ModelTier[] = [
   {
     name: "gpt-5-mini",
@@ -26,10 +26,16 @@ const MODEL_TIERS: ModelTier[] = [
   },
 ];
 
-const SYSTEM_PROMPT_OVERHEAD_TOKENS = 2_000;
+const SYSTEM_PROMPT_OVERHEAD_TOKENS = 3_000;
+const REPO_MAP_OVERHEAD_TOKENS = 2_000;
 const RESPONSE_HEADROOM_TOKENS = 4_000;
+// Extra budget for files the model reads via read_file during exploration.
+const TOOL_CONTEXT_HEADROOM_TOKENS = 8_000;
 const RESERVED_TOKENS =
-  SYSTEM_PROMPT_OVERHEAD_TOKENS + RESPONSE_HEADROOM_TOKENS;
+  SYSTEM_PROMPT_OVERHEAD_TOKENS +
+  REPO_MAP_OVERHEAD_TOKENS +
+  RESPONSE_HEADROOM_TOKENS +
+  TOOL_CONTEXT_HEADROOM_TOKENS;
 
 // Small diffs: use the free mini model for speed.
 // Beyond this threshold, step up to codex models.

@@ -4,6 +4,7 @@ import {
   PROGRESS_SPINNER_LABELS,
   type ReviewProgressPhase,
 } from "@core/config";
+import { useActiveToolCall } from "@core/streamStore";
 import { useAnimationFrame } from "@ui/hooks";
 
 const SPINNER_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
@@ -13,12 +14,18 @@ const PHASES_WITH_MODEL: ReviewProgressPhase[] = [
   "session",
   "sending",
   "streaming",
+  "exploring",
 ];
 
 function spinnerLabel(
   phase: ReviewProgressPhase,
-  model?: string | null
+  model?: string | null,
+  toolCall?: { toolName: string; filePath?: string; callNumber: number }
 ): string {
+  if (phase === "exploring" && toolCall) {
+    const target = toolCall.filePath ?? toolCall.toolName;
+    return `Reading ${target} (file ${toolCall.callNumber})...`;
+  }
   const base = PROGRESS_SPINNER_LABELS[phase] ?? phase;
   if (!model?.trim() || !PHASES_WITH_MODEL.includes(phase)) {
     return base;
@@ -48,6 +55,8 @@ export function ProgressBar({
   error,
   status,
 }: ProgressBarProps) {
+  const toolCall = useActiveToolCall();
+
   if (error) {
     return (
       <Box paddingX={1} marginTop={1}>
@@ -57,10 +66,11 @@ export function ProgressBar({
   }
 
   if (isGenerating && phase) {
+    const label = spinnerLabel(phase, model, toolCall);
     return (
       <Box paddingX={1} marginTop={1}>
         <AnimatedSpinner />
-        <Text color="gray"> {spinnerLabel(phase, model)}</Text>
+        <Text color={phase === "exploring" ? "cyan" : "gray"}> {label}</Text>
       </Box>
     );
   }

@@ -1,5 +1,9 @@
 import type { ReviewConfig, ReviewIssue } from "@core/config";
-import { CHARS_PER_TOKEN, MAX_DIFF_LENGTH } from "@core/config";
+import {
+  CHARS_PER_TOKEN,
+  MAX_DIFF_LENGTH,
+  MAX_REPO_MAP_FILES,
+} from "@core/config";
 
 export function getEffectiveDiffLimit(config: ReviewConfig): number {
   const charLimit = config.maxDiffLength ?? MAX_DIFF_LENGTH;
@@ -57,7 +61,12 @@ Rules:
 - Be honest: if the code looks good, say so briefly and note any minor improvements
 - If the diff is truncated or you cannot see the full contents of a file, do NOT flag issues about code you cannot see. Only review what is visible. Do not hallucinate or guess about hidden content
 - Group related issues when they share a root cause
-- Do NOT wrap the entire response in markdown code fences`;
+- Do NOT wrap the entire response in markdown code fences
+
+You have access to a \`read_file\` tool that can read any file in the repository.
+When the diff references symbols, imports, interfaces, or dependencies defined in files outside the current diff view, use \`read_file\` to pull in that context before forming your review. This helps you avoid false positives and produce more accurate assessments.
+Do NOT read files speculatively or in bulk — only read a file when the diff specifically references something you need to verify.
+A repository file listing is provided in the user message so you know which files are available to read.`;
 
 function buildFocusSection(config: ReviewConfig): string {
   if (config.focusCategories.length === 0) return "";
@@ -87,9 +96,34 @@ export function buildReviewPrompt(
   config: ReviewConfig,
   branch: string,
   stat?: string,
-  wasTruncated?: boolean
+  wasTruncated?: boolean,
+  repoFiles?: string[]
 ): string {
   let prompt = "";
+
+  if (repoFiles && repoFiles.length > 0) {
+    // Budget: repo map should use at most 20% of the effective diff limit
+    // so it doesn't crowd out the actual diff content.
+    const charBudget = Math.floor(getEffectiveDiffLimit(config) * 0.2);
+    let charCount = 0;
+    let fileCount = 0;
+    for (const file of repoFiles) {
+      const added = file.length + 1; // +1 for newline
+      if (fileCount >= MAX_REPO_MAP_FILES || charCount + added > charBudget) {
+        break;
+      }
+      charCount += added;
+      fileCount++;
+    }
+    const filesToShow = repoFiles.slice(0, fileCount);
+    const omitted = repoFiles.length - fileCount;
+    prompt += `Repository files (${repoFiles.length} tracked files):\n`;
+    prompt += filesToShow.join("\n");
+    if (omitted > 0) {
+      prompt += `\n[...and ${omitted} more files]`;
+    }
+    prompt += "\n\n";
+  }
 
   if (stat) {
     prompt += `File change summary:\n${stat}\n\n`;

@@ -3,6 +3,7 @@ import type { ReviewConfig, ReviewProgressPhase } from "@core/config";
 import {
   COPILOT_CLIENT_STOP_TIMEOUT_MS,
   COPILOT_SESSION_TIMEOUT,
+  MAX_REPO_MAP_FILES,
 } from "@core/config";
 import {
   buildReviewPrompt,
@@ -10,7 +11,7 @@ import {
   getEffectiveDiffLimit,
 } from "./prompt.js";
 import { selectModel } from "./modelSelector.js";
-import { getSmartDiff } from "@core/git";
+import { getSmartDiff, getRepositoryFileList } from "@core/git";
 
 export interface ReviewGeneratorOptions {
   /** Git repo root; Copilot tool paths resolve relative to this directory. */
@@ -33,7 +34,9 @@ export class ReviewGenerator {
     branch: string,
     stat?: string,
     onChunk?: (chunk: string) => void,
-    onProgress?: (phase: ReviewProgressPhase) => void
+    onProgress?: (phase: ReviewProgressPhase) => void,
+    onToolCall?: (toolName: string, args?: string) => void,
+    onToolComplete?: () => void
   ): Promise<string> {
     const effectiveLimit = getEffectiveDiffLimit(config);
     let wasTruncated = false;
@@ -45,12 +48,18 @@ export class ReviewGenerator {
       wasTruncated = result.wasTruncated;
     }
 
+    const repoFiles =
+      config.includeRepoMap !== false
+        ? await getRepositoryFileList(MAX_REPO_MAP_FILES)
+        : [];
+
     const prompt = buildReviewPrompt(
       content,
       config,
       branch,
       stat,
-      wasTruncated
+      wasTruncated,
+      repoFiles
     );
 
     const model = selectModel(content, config);
@@ -71,32 +80,55 @@ export class ReviewGenerator {
         : {}),
     });
 
-    return this.runWithSession(this.session, prompt, onChunk, onProgress);
+    return this.runWithSession(
+      this.session,
+      prompt,
+      onChunk,
+      onProgress,
+      onToolCall,
+      onToolComplete
+    );
   }
 
   async followUp(
     prompt: string,
     onChunk?: (chunk: string) => void,
-    onProgress?: (phase: ReviewProgressPhase) => void
+    onProgress?: (phase: ReviewProgressPhase) => void,
+    onToolCall?: (toolName: string, args?: string) => void,
+    onToolComplete?: () => void
   ): Promise<string> {
     if (!this.session) {
       throw new Error("No active review session. Call review() first.");
     }
-    return this.runWithSession(this.session, prompt, onChunk, onProgress);
+    return this.runWithSession(
+      this.session,
+      prompt,
+      onChunk,
+      onProgress,
+      onToolCall,
+      onToolComplete
+    );
   }
 
   private async runWithSession(
     session: Awaited<ReturnType<CopilotClient["createSession"]>>,
     prompt: string,
     onChunk?: (chunk: string) => void,
-    onProgress?: (phase: ReviewProgressPhase) => void
+    onProgress?: (phase: ReviewProgressPhase) => void,
+    onToolCall?: (toolName: string, args?: string) => void,
+    onToolComplete?: () => void
   ): Promise<string> {
     let fullRawMessage = "";
     let hasReportedStreaming = false;
 
     const unsubscribe = session.on((event) => {
       const data = event.data as
-        | { deltaContent?: string; content?: string }
+        | {
+            deltaContent?: string;
+            content?: string;
+            toolName?: string;
+            arguments?: string;
+          }
         | undefined;
       if (event.type === "assistant.message_delta" && data?.deltaContent) {
         if (!hasReportedStreaming) {
@@ -110,6 +142,24 @@ export class ReviewGenerator {
         if (!fullRawMessage) {
           fullRawMessage = data.content;
         }
+      } else if (event.type === "tool.execution_start" && data?.toolName) {
+        onProgress?.("exploring");
+        let toolArgs: string | undefined;
+        try {
+          toolArgs =
+            data.arguments === undefined
+              ? undefined
+              : typeof data.arguments === "string"
+                ? data.arguments
+                : JSON.stringify(data.arguments);
+        } catch {
+          toolArgs = String(data.arguments);
+        }
+        onToolCall?.(data.toolName, toolArgs);
+        // Reset so we re-report streaming when text generation resumes
+        hasReportedStreaming = false;
+      } else if (event.type === "tool.execution_complete") {
+        onToolComplete?.();
       }
     });
 

@@ -35,6 +35,7 @@ export {
   PROGRESS_SPINNER_LABELS,
   PROGRESS_STEP_LABELS,
   INITIAL_PROGRESS_PHASE,
+  MAX_REPO_MAP_FILES,
 } from "./constants.js";
 
 export { loadConfig, getConfigTemplate } from "./config.js";

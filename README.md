@@ -63,6 +63,7 @@ review-ai -y --json
 | `--max-diff-length <n>`   | Max diff length before truncation                                                 |
 | `--max-diff-tokens <n>`   | Max estimated diff tokens                                                         |
 | `--no-import-collapse`    | Disable import collapsing                                                         |
+| `--no-repo-map`           | Disable repository file map in prompt                                             |
 | `-v, --verbose`           | Verbose logs                                                                      |
 | `-y, --yes`               | Skip file picker (non-interactive)                                                |
 | `--json`                  | Output NDJSON events (requires `--yes`)                                           |
@@ -119,6 +120,7 @@ Create `.review-ai.json` in your project root or home directory:
   "maxDiffLength": 8000,
   "ignoreWhitespaceInDiff": false,
   "importCollapse": true,
+  "includeRepoMap": true,
   "outputPath": "./PR-REVIEW.md",
   "autoOpen": false
 }
@@ -126,11 +128,23 @@ Create `.review-ai.json` in your project root or home directory:
 
 Run `review-ai --init` to print the full template.
 
+## Agentic context pulling
+
+When the AI encounters references to symbols, types, or imports defined outside the visible diff, it can automatically read those files from the repository to produce more accurate reviews. This works out of the box with no extra configuration.
+
+- A repository file map (from `git ls-files`) is included in each review so the model knows which files are available.
+- The model uses the Copilot SDK's `read_file` tool on demand -- only when the diff references something it needs to verify.
+- During exploration, the progress indicator shows which file is being read (e.g., "Reading src/utils/helper.ts...").
+- The `workingDirectory` is always set to the Git root, so cross-package reads work in monorepos.
+
+Large repositories (>2000 tracked files) have their file map automatically truncated to keep prompt sizes reasonable.
+
 ## NDJSON output (`--json`)
 
 Use with `--yes`. Events written to stdout:
 
-- `progress` (`session`, `sending`, `streaming`, `parsing`)
+- `progress` (`session`, `sending`, `streaming`, `exploring`, `parsing`)
+- `tool_call` (emitted when the model reads a file during review)
 - `chunk`
 - `issue`
 - `summary`

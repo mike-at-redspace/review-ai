@@ -1,3 +1,8 @@
-export { getGitRepoRoot, isGitRepository, getAllChanges } from "./git.js";
+export {
+  getGitRepoRoot,
+  isGitRepository,
+  getAllChanges,
+  getRepositoryFileList,
+} from "./git.js";
 
 export { getSmartDiff } from "./smartDiff.js";

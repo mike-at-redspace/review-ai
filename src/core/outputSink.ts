@@ -16,9 +16,27 @@ const SEVERITY_STYLES: Record<Severity, (text: string) => string> = {
 };
 
 export class HumanSink implements OutputSink {
+  private toolCallCount = 0;
+
   progress(phase: ReviewProgressPhase): void {
     const label = PROGRESS_STEP_LABELS[phase] ?? phase;
     process.stderr.write(chalk.gray(`  ${label}...\r`));
+  }
+
+  toolCall(_toolName: string, args?: string): void {
+    this.toolCallCount++;
+    let filePath = _toolName;
+    if (args) {
+      try {
+        const parsed = JSON.parse(args);
+        filePath = parsed.file_path ?? parsed.path ?? _toolName;
+      } catch {
+        filePath = args;
+      }
+    }
+    process.stderr.write(
+      chalk.cyan(`  reading ${filePath} (file ${this.toolCallCount})...\r`)
+    );
   }
 
   chunk(text: string): void {
@@ -52,6 +70,10 @@ export class JsonSink implements OutputSink {
 
   progress(phase: ReviewProgressPhase): void {
     this.write({ type: "progress", phase });
+  }
+
+  toolCall(toolName: string, args?: string): void {
+    this.write({ type: "tool_call", tool: toolName, args });
   }
 
   chunk(text: string): void {

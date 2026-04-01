@@ -62,6 +62,8 @@ export interface ReviewConfig {
   focusCategories: ReviewCategory[];
   ignoreWhitespaceInDiff?: boolean;
   importCollapse?: boolean;
+  /** Include a repository file map in the prompt so the model can navigate files. Default true. */
+  includeRepoMap?: boolean;
   languageImportPatterns?: Record<string, string>;
   outputPath: string;
   autoOpen: boolean;
@@ -71,6 +73,7 @@ export type ReviewProgressPhase =
   | "session"
   | "sending"
   | "streaming"
+  | "exploring"
   | "parsing";
 
 export type GitExecutor = (
@@ -102,6 +105,7 @@ export type OutputMode = "human" | "json";
 // Output sink for structured / human output
 export interface OutputSink {
   progress(phase: ReviewProgressPhase): void;
+  toolCall(toolName: string, args?: string): void;
   issue(issue: ReviewIssue): void;
   summary(session: ReviewSession): void;
   error(err: unknown): void;
