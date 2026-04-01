@@ -169,24 +169,99 @@ export async function getAllChanges(options?: {
   // Compare to a base branch (e.g. main) — uses three-dot diff
   if (options?.compareTo) {
     const base = options.compareTo;
-    const nameStatusOutput = await executor(
+    const committedOutput = await executor(
       `git diff ${base}...HEAD --name-status${wsFlag}`
     ).catch(() => "");
-    const parsedFiles = parseNameStatus(nameStatusOutput);
+    const committedFiles = parseNameStatus(committedOutput);
+
+    const fileMap = new Map<
+      string,
+      { status: "added" | "modified" | "deleted" | "renamed"; staged: boolean }
+    >();
+
+    // Include changes already committed on this branch.
+    for (const f of committedFiles) {
+      fileMap.set(f.path, { status: f.status, staged: false });
+    }
+
+    // Include uncommitted changes on top of branch commits.
+    const stagedOutput = await executor(
+      `git diff --staged --name-status${wsFlag}`
+    ).catch(() => "");
+    const stagedFiles = parseNameStatus(stagedOutput);
+    for (const f of stagedFiles) {
+      fileMap.set(f.path, { status: f.status, staged: true });
+    }
+
+    if (!options?.stagedOnly) {
+      const unstagedOutput = await executor(
+        `git diff --name-status${wsFlag}`
+      ).catch(() => "");
+      const unstagedFiles = parseNameStatus(unstagedOutput);
+      for (const f of unstagedFiles) {
+        if (fileMap.has(f.path) && fileMap.get(f.path)?.staged) continue;
+        fileMap.set(f.path, { status: f.status, staged: false });
+      }
+
+      const untrackedOutput = await executor(
+        "git ls-files --others --exclude-standard"
+      ).catch(() => "");
+      const untrackedPaths = untrackedOutput.trim().split("\n").filter(Boolean);
+      for (const path of untrackedPaths) {
+        fileMap.set(path, { status: "added", staged: false });
+      }
+    }
 
     const files: ChangedFile[] = [];
-    for (const f of parsedFiles) {
-      const binary = isBinaryFile(f.path);
+    for (const [path, meta] of fileMap.entries()) {
+      const binary = isBinaryFile(path);
       let diff = "";
       if (!binary) {
-        diff = await executor(
-          `git diff ${base}...HEAD${wsFlag} -- "${f.path}"`
+        const segments: string[] = [];
+
+        // Changes already committed on this branch versus base.
+        const committedSegment = await executor(
+          `git diff ${base}...HEAD${wsFlag} -- "${path}"`
         ).catch(() => "");
+        if (committedSegment.trim()) {
+          segments.push(committedSegment);
+        }
+
+        // Staged changes in the working tree.
+        const stagedSegment = await executor(
+          `git diff --staged${wsFlag} -- "${path}"`
+        ).catch(() => "");
+        if (stagedSegment.trim()) {
+          segments.push(stagedSegment);
+        }
+
+        // Unstaged working tree changes (unless staged-only mode).
+        if (!options?.stagedOnly) {
+          const unstagedSegment = await executor(
+            `git diff${wsFlag} -- "${path}"`
+          ).catch(() => "");
+          if (unstagedSegment.trim()) {
+            segments.push(unstagedSegment);
+          }
+
+          // Truly untracked files need a no-index diff to produce patch text.
+          if (meta.status === "added" && segments.length === 0) {
+            const noIndexSegment = await executor(
+              `git diff --no-index /dev/null "${path}" || true`
+            ).catch(() => "");
+            if (noIndexSegment.trim()) {
+              segments.push(noIndexSegment);
+            }
+          }
+        }
+
+        diff = segments.join("\n");
       }
+
       files.push({
-        path: f.path,
-        status: f.status,
-        staged: false,
+        path,
+        status: meta.status,
+        staged: meta.staged,
         binary,
         diff,
       });
@@ -194,10 +269,22 @@ export async function getAllChanges(options?: {
 
     let stat: string | undefined;
     try {
-      const statOutput = await executor(
+      const committedStat = await executor(
         `git diff ${base}...HEAD --stat${wsFlag}`
       ).catch(() => "");
-      stat = statOutput.trim() || undefined;
+      const parts: string[] = [];
+      if (committedStat.trim()) parts.push(committedStat.trim());
+      const stagedStat = await executor(
+        `git diff --staged --stat${wsFlag}`
+      ).catch(() => "");
+      if (stagedStat.trim()) parts.push(stagedStat.trim());
+      if (!options?.stagedOnly) {
+        const unstagedStat = await executor(`git diff --stat${wsFlag}`).catch(
+          () => ""
+        );
+        if (unstagedStat.trim()) parts.push(unstagedStat.trim());
+      }
+      stat = parts.length > 0 ? parts.join("\n") : undefined;
     } catch {
       stat = undefined;
     }

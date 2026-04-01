@@ -178,7 +178,15 @@ async function main(): Promise<void> {
   });
 
   if (changes.files.length === 0) {
-    console.log(chalk.yellow("No uncommitted changes found."));
+    if (options.compareTo) {
+      console.log(
+        chalk.yellow(
+          `No changes found between current branch (including uncommitted changes) and ${options.compareTo}.`
+        )
+      );
+    } else {
+      console.log(chalk.yellow("No uncommitted changes found."));
+    }
     process.exit(0);
   }
 
