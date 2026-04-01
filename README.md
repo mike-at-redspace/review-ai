@@ -1,14 +1,10 @@
 # review-ai
 
-AI-powered code review for uncommitted changes using GitHub Copilot.
-
-```
-┌─┐┌─┐┬  ┬┬┌─┐┬ ┬  ┌─┐┬
-├┬┘├┤ └┐┌┘│├┤ │││  ├─┤│
-┴└─└─┘ └┘ ┴└─┘└┴┘  ┴ ┴┴
-```
-
 An interactive terminal UI for reviewing your working changes before committing. Select files, get a streaming AI review, then chat with the reviewer to expand on issues, request rewrites, or focus on specific areas. Generates a `PR-REVIEW.md` report when done.
+
+<img width="45%" height="auto" alt="image" src="https://github.com/user-attachments/assets/1576e276-a01e-4426-b912-88ed5855e023" />
+
+<img width="45%" height="730" alt="image" src="https://github.com/user-attachments/assets/10ed8cc5-86a7-484d-a438-44d3dc8aa0ba" />
 
 ## Requirements
 
