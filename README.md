@@ -34,6 +34,9 @@ review-ai --compare-to main
 # Non-interactive — review all files and generate report
 review-ai -y --no-chat
 
+# Non-interactive JSON stream (NDJSON) for CI
+review-ai -y --json
+
 # Use a specific model
 review-ai --model gpt-5.3-codex
 
@@ -57,26 +60,28 @@ review-ai -s warning
    - **Focus** on a specific area (e.g. "focus on error handling")
    - Request a **rewrite** of problematic code
    - Type **done** to generate the report
+4. **Review complete** — on the summary screen, press **Enter** to open chat or **D** to write the report immediately.
 
 ## CLI Options
 
-| Option | Description |
-|--------|-------------|
-| `-a, --all` | Include all changes (staged + unstaged + untracked) |
-| `--staged` | Review only staged changes |
-| `--compare-to <branch>` | Compare current branch to a base branch (e.g. main) |
-| `--files <patterns...>` | Only review specific files (glob patterns) |
-| `-s, --severity <level>` | Minimum severity: `critical`, `warning`, `info`, `nitpick` |
+| Option                    | Description                                                                        |
+| ------------------------- | ---------------------------------------------------------------------------------- |
+| `-a, --all`               | Include all changes (staged + unstaged + untracked)                                |
+| `--staged`                | Review only staged changes                                                         |
+| `--compare-to <branch>`   | Compare current branch to a base branch (e.g. main)                                |
+| `--files <patterns...>`   | Only review specific files (glob patterns)                                         |
+| `-s, --severity <level>`  | Minimum severity: `critical`, `warning`, `info`, `nitpick`                         |
 | `--focus <categories...>` | Focus on: `bug`, `smell`, `architecture`, `performance`, `readability`, `security` |
-| `-o, --output <path>` | Output path for report (default: `./PR-REVIEW.md`) |
-| `--model <name>` | Override Copilot model |
-| `--max-diff-length <n>` | Max diff length in characters before truncation |
-| `--max-diff-tokens <n>` | Max diff size in estimated tokens |
-| `--no-import-collapse` | Disable import line collapsing |
-| `-v, --verbose` | Show verbose output |
-| `-y, --yes` | Skip file selection, review all changes non-interactively |
-| `--no-chat` | Skip interactive chat, generate report immediately |
-| `--init` | Show config file template |
+| `-o, --output <path>`     | Output path for report (default: `./PR-REVIEW.md`)                                 |
+| `--model <name>`          | Override Copilot model                                                             |
+| `--max-diff-length <n>`   | Max diff length in characters before truncation                                    |
+| `--max-diff-tokens <n>`   | Max diff size in estimated tokens                                                  |
+| `--no-import-collapse`    | Disable import line collapsing                                                     |
+| `-v, --verbose`           | Show verbose output                                                                |
+| `-y, --yes`               | Skip file selection, review all changes non-interactively                          |
+| `--json`                  | Output structured NDJSON events (requires `--yes`)                                 |
+| `--no-chat`               | Skip interactive chat, generate report immediately                                 |
+| `--init`                  | Show config file template                                                          |
 
 ## Configuration
 
@@ -84,7 +89,7 @@ Create a `.review-ai.json` in your project root or home directory:
 
 ```json
 {
-  "model": "gpt-5-mini",
+  "model": "auto",
   "premiumModel": "gpt-5.3-codex",
   "minSeverity": "nitpick",
   "focusCategories": [],
@@ -100,14 +105,30 @@ Run `review-ai --init` to print the full config template.
 
 The `REVIEW_AI_MODEL` environment variable overrides the model setting.
 
+Model behavior:
+
+- `"model": "auto"` uses `gpt-5-mini` for small diffs.
+- For larger diffs, `premiumModel` is used when set (default: `gpt-5.3-codex`).
+- Passing `--model` always overrides config model selection.
+
+## NDJSON Output (`--json`)
+
+Use `--json` with `--yes` to stream machine-readable events to stdout:
+
+- `progress` — current review phase (`session`, `sending`, `streaming`, `parsing`)
+- `chunk` — streamed model text chunk
+- `issue` — parsed issue object
+- `summary` — totals and selected files
+- `error` — terminal error message
+
 ## Severity Levels
 
-| Level | Meaning |
-|-------|---------|
+| Level      | Meaning                                      |
+| ---------- | -------------------------------------------- |
 | `critical` | Bugs, data loss, or security vulnerabilities |
-| `warning` | Likely problems or maintainability concerns |
-| `info` | Worth improving but not urgent |
-| `nitpick` | Style or preference |
+| `warning`  | Likely problems or maintainability concerns  |
+| `info`     | Worth improving but not urgent               |
+| `nitpick`  | Style or preference                          |
 
 ## Development
 

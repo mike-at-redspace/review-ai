@@ -1,4 +1,5 @@
 dist
 node_modules
+claude-src
 pnpm-lock.yaml
 PR-REVIEW.md

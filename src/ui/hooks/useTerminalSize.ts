@@ -11,9 +11,6 @@ export function useTerminalSize(): { columns: number; rows: number } {
 
   useEffect(() => {
     function updateSize() {
-      if (process.stdout.isTTY) {
-        process.stdout.write("\x1b[2J\x1b[H");
-      }
       setSize({
         columns: process.stdout.columns ?? FALLBACK_COLUMNS,
         rows: process.stdout.rows ?? FALLBACK_ROWS,

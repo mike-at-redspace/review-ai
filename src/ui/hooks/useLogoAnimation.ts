@@ -1,15 +1,8 @@
-import { useState, useEffect } from "react";
-import { LOGO_ANIMATION_INTERVAL_MS } from "@core/config";
+import { useAnimationFrame } from "./useClock.js";
 
-export function useLogoAnimation(
-  intervalMs: number = LOGO_ANIMATION_INTERVAL_MS
-): number {
-  const [tick, setTick] = useState(0);
+const COLOR_CYCLE_MS = 300;
 
-  useEffect(() => {
-    const id = setInterval(() => setTick((n) => n + 1), intervalMs);
-    return () => clearInterval(id);
-  }, [intervalMs]);
-
-  return tick;
+export function useLogoAnimation(): number {
+  const time = useAnimationFrame(COLOR_CYCLE_MS);
+  return Math.floor(time / COLOR_CYCLE_MS);
 }

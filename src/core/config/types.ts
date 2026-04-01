@@ -67,15 +67,6 @@ export interface ReviewConfig {
   autoOpen: boolean;
 }
 
-export type ViewState =
-  | "file-selection"
-  | "reviewing"
-  | "review-complete"
-  | "chatting"
-  | "generating-report"
-  | "done"
-  | "error";
-
 export type ReviewProgressPhase =
   | "session"
   | "sending"
@@ -86,3 +77,33 @@ export type GitExecutor = (
   command: string,
   options?: { input?: string }
 ) => Promise<string>;
+
+// Discriminated union view state — each state carries its own data
+export type ViewState =
+  | { type: "file-selection" }
+  | { type: "reviewing"; phase: ReviewProgressPhase }
+  | { type: "review-complete" }
+  | { type: "chatting" }
+  | { type: "generating-report" }
+  | { type: "done"; outputPath: string }
+  | { type: "error"; message: string };
+
+// Typed chat commands
+export type ChatCommand =
+  | { type: "expand"; issueId: number }
+  | { type: "ignore"; issueId: number }
+  | { type: "focus"; area: string }
+  | { type: "rewrite"; issueId: number }
+  | { type: "done" }
+  | { type: "freeform"; text: string };
+
+export type OutputMode = "human" | "json";
+
+// Output sink for structured / human output
+export interface OutputSink {
+  progress(phase: ReviewProgressPhase): void;
+  issue(issue: ReviewIssue): void;
+  summary(session: ReviewSession): void;
+  error(err: unknown): void;
+  chunk(text: string): void;
+}

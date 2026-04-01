@@ -10,6 +10,9 @@ export type {
   ViewState,
   ReviewProgressPhase,
   GitExecutor,
+  ChatCommand,
+  OutputMode,
+  OutputSink,
 } from "./types.js";
 
 export {
@@ -17,13 +20,13 @@ export {
   CONFIG_FILENAME,
   MAX_GIT_BUFFER_SIZE,
   MAX_DIFF_LENGTH,
+  CHARS_PER_TOKEN,
   COPILOT_SESSION_TIMEOUT,
   DEFAULT_COPILOT_MODEL,
   DEFAULT_PREMIUM_MODEL,
   DEFAULT_RECENT_COMMITS_COUNT,
   MIN_TERMINAL_COLUMNS,
   MIN_TERMINAL_ROWS,
-  LOGO_ANIMATION_INTERVAL_MS,
   LOGO_ANIMATION_COLORS,
   LOGO_LINES,
   SEVERITY_COLORS,

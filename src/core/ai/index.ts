@@ -1,6 +1,7 @@
 export { ReviewGenerator } from "./reviewer.js";
+export { selectModel } from "./modelSelector.js";
 export {
-  REVIEW_SYSTEM_PROMPT,
+  buildSystemPrompt,
   buildReviewPrompt,
   buildExpandPrompt,
   buildFocusPrompt,

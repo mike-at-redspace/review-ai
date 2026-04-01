@@ -7,3 +7,7 @@ export { ChatInput } from "./ChatInput.js";
 export { ChatMessage } from "./ChatMessage.js";
 export { StreamingResponse } from "./StreamingResponse.js";
 export { ProgressBar } from "./ProgressBar.js";
+export { Divider } from "./Divider.js";
+export { StatusIcon } from "./StatusIcon.js";
+export type { StatusType } from "./StatusIcon.js";
+export { Byline } from "./Byline.js";

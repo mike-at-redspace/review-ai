@@ -1,17 +1,14 @@
 import React from "react";
 import { Box, Text } from "ink";
+import { useStreamText, useIsStreaming } from "@core/streamStore";
 
 interface ReviewStreamProps {
-  rawText: string;
-  isStreaming: boolean;
   maxHeight?: number;
 }
 
-export function ReviewStream({
-  rawText,
-  isStreaming,
-  maxHeight,
-}: ReviewStreamProps) {
+export function ReviewStream({ maxHeight }: ReviewStreamProps) {
+  const rawText = useStreamText();
+  const isStreaming = useIsStreaming();
   const borderColor = isStreaming ? "yellow" : "green";
   const lines = rawText.split("\n");
   const visibleLines =

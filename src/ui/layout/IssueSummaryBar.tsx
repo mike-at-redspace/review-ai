@@ -2,6 +2,15 @@ import React from "react";
 import { Box, Text } from "ink";
 import type { ReviewIssue, Severity } from "@core/config";
 import { SEVERITY_COLORS } from "@core/config";
+import { StatusIcon } from "./StatusIcon.js";
+import type { StatusType } from "./StatusIcon.js";
+
+const SEVERITY_STATUS_MAP: Record<Severity, StatusType> = {
+  critical: "error",
+  warning: "warning",
+  info: "info",
+  nitpick: "pending",
+};
 
 interface IssueSummaryBarProps {
   issues: ReviewIssue[];
@@ -23,9 +32,12 @@ export function IssueSummaryBar({ issues }: IssueSummaryBarProps) {
   for (const sev of ["critical", "warning", "info", "nitpick"] as Severity[]) {
     if (counts[sev] > 0) {
       parts.push(
-        <Text key={sev} color={SEVERITY_COLORS[sev]}>
-          {counts[sev]} {sev}
-        </Text>
+        <Box key={sev} gap={1}>
+          <StatusIcon status={SEVERITY_STATUS_MAP[sev]} />
+          <Text color={SEVERITY_COLORS[sev]}>
+            {counts[sev]} {sev}
+          </Text>
+        </Box>
       );
     }
   }
@@ -33,7 +45,8 @@ export function IssueSummaryBar({ issues }: IssueSummaryBarProps) {
   if (parts.length === 0) {
     return (
       <Box paddingX={1}>
-        <Text color="green">No issues found</Text>
+        <StatusIcon status="success" />
+        <Text color="green"> No issues found</Text>
       </Box>
     );
   }

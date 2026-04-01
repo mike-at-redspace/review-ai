@@ -1,13 +1,20 @@
 import React, { useState, useCallback, useEffect } from "react";
 import { Box, Text, useInput } from "ink";
-import { Header, ProgressBar, IssueSummaryBar, IssueList } from "@ui/layout";
+import {
+  Header,
+  ProgressBar,
+  IssueSummaryBar,
+  IssueList,
+  Divider,
+} from "@ui/layout";
 import { FileSelection } from "@ui/features/fileSelection";
 import { ReviewStream } from "@ui/features/reviewStream";
 import { ChatLoop } from "@ui/features/chat";
 import { useReviewContext } from "@ui/context/ReviewContext";
 import { useTerminalSize } from "@ui/hooks/useTerminalSize";
 import { parseReviewResponse, generatePrReviewMarkdown } from "@core/ai";
-import type { ViewState, ReviewProgressPhase, ChangedFile } from "@core/config";
+import { appendChunk, startStream, finishStream } from "@core/streamStore";
+import type { ViewState, ChangedFile } from "@core/config";
 import { MIN_TERMINAL_COLUMNS, MIN_TERMINAL_ROWS } from "@core/config";
 import { writeFileSync } from "fs";
 
@@ -25,10 +32,9 @@ export function Dashboard({
   onError,
 }: DashboardProps) {
   const { config, generator, session, updateSession } = useReviewContext();
-  const [viewState, setViewState] = useState<ViewState>("file-selection");
-  const [streamingText, setStreamingText] = useState("");
-  const [phase, setPhase] = useState<ReviewProgressPhase>("session");
-  const [error, setError] = useState<string | undefined>();
+  const [viewState, setViewState] = useState<ViewState>({
+    type: "file-selection",
+  });
   const { columns, rows } = useTerminalSize();
   const terminalTooSmall =
     columns < MIN_TERMINAL_COLUMNS || rows < MIN_TERMINAL_ROWS;
@@ -41,13 +47,6 @@ export function Dashboard({
     };
   }, [generator]);
 
-  useInput((input) => {
-    if ((input === "c" && viewState === "file-selection") || input === "") {
-      // Ctrl+C handled by process
-    }
-  });
-
-  // File selection confirmed
   const handleFilesConfirmed = useCallback(
     async (selectedPaths: string[]) => {
       const selectedFiles = gitFiles.filter((f) =>
@@ -64,10 +63,8 @@ export function Dashboard({
         startedAt: Date.now(),
       });
 
-      setViewState("reviewing");
-      setStreamingText("");
-      setPhase("session");
-      setError(undefined);
+      setViewState({ type: "reviewing", phase: "session" });
+      startStream();
 
       try {
         const rawResponse = await generator.review(
@@ -76,47 +73,46 @@ export function Dashboard({
           session.branch,
           undefined,
           (chunk: string) => {
-            setStreamingText((prev) => prev + chunk);
+            appendChunk(chunk);
           },
-          (p: ReviewProgressPhase) => {
-            setPhase(p);
+          (phase) => {
+            setViewState({ type: "reviewing", phase });
           }
         );
 
+        finishStream();
         const issues = parseReviewResponse(rawResponse);
         updateSession({ issues });
-
-        setViewState("review-complete");
+        setViewState({ type: "review-complete" });
       } catch (err) {
-        const errorMessage =
-          err instanceof Error ? err.message : "Unknown error";
-        setError(errorMessage);
-        setViewState("error");
+        finishStream();
+        const message = err instanceof Error ? err.message : "Unknown error";
+        setViewState({ type: "error", message });
         onError(err instanceof Error ? err : new Error(String(err)));
       }
     },
     [gitFiles, config, generator, session.branch, updateSession, onError]
   );
 
-  // Generate report and finish
   const handleDone = useCallback(() => {
-    setViewState("generating-report");
+    setViewState({ type: "generating-report" });
     try {
       const markdown = generatePrReviewMarkdown(session, config);
       writeFileSync(config.outputPath, markdown, "utf-8");
-      setViewState("done");
+      setViewState({ type: "done", outputPath: config.outputPath });
       setTimeout(() => {
         onComplete();
       }, 1500);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to write report");
-      setViewState("error");
+      setViewState({
+        type: "error",
+        message: err instanceof Error ? err.message : "Failed to write report",
+      });
     }
   }, [session, config, onComplete]);
 
-  // Transition from review-complete to chatting
   const handleStartChat = useCallback(() => {
-    setViewState("chatting");
+    setViewState({ type: "chatting" });
   }, []);
 
   if (terminalTooSmall) {
@@ -145,27 +141,25 @@ export function Dashboard({
         version={version}
         maxWidth={contentWidth}
       />
+      <Divider width={contentWidth} />
 
-      {viewState === "file-selection" && (
+      {viewState.type === "file-selection" && (
         <FileSelection
           files={gitFiles}
           onConfirm={handleFilesConfirmed}
           maxHeight={contentHeight}
+          maxWidth={contentWidth}
         />
       )}
 
-      {viewState === "reviewing" && (
+      {viewState.type === "reviewing" && (
         <>
-          <ReviewStream
-            rawText={streamingText}
-            isStreaming={true}
-            maxHeight={contentHeight}
-          />
-          <ProgressBar phase={phase} isGenerating={true} error={error} />
+          <ReviewStream maxHeight={contentHeight} />
+          <ProgressBar phase={viewState.phase} isGenerating={true} />
         </>
       )}
 
-      {viewState === "review-complete" && (
+      {viewState.type === "review-complete" && (
         <Box flexDirection="column">
           <IssueSummaryBar issues={session.issues} />
           <IssueList
@@ -174,15 +168,15 @@ export function Dashboard({
           />
           <Box paddingX={1} marginTop={1}>
             <Text color="cyan">
-              Press Enter to start interactive review, or type &apos;done&apos;
-              to generate report
+              Press Enter to start interactive review, or press D to generate
+              report
             </Text>
           </Box>
           <ReviewCompleteInput onChat={handleStartChat} onDone={handleDone} />
         </Box>
       )}
 
-      {viewState === "chatting" && (
+      {viewState.type === "chatting" && (
         <ChatLoop
           onDone={handleDone}
           maxWidth={contentWidth}
@@ -190,7 +184,7 @@ export function Dashboard({
         />
       )}
 
-      {viewState === "generating-report" && (
+      {viewState.type === "generating-report" && (
         <Box paddingX={1} marginY={1}>
           <ProgressBar
             phase={undefined}
@@ -200,22 +194,21 @@ export function Dashboard({
         </Box>
       )}
 
-      {viewState === "done" && (
+      {viewState.type === "done" && (
         <Box paddingX={1} marginY={1}>
-          <Text color="green">Report saved to {config.outputPath}</Text>
+          <Text color="green">Report saved to {viewState.outputPath}</Text>
         </Box>
       )}
 
-      {viewState === "error" && error && (
+      {viewState.type === "error" && (
         <Box paddingX={1} marginY={1}>
-          <Text color="red">✕ {error}</Text>
+          <Text color="red">✕ {viewState.message}</Text>
         </Box>
       )}
     </Box>
   );
 }
 
-// Small helper component for review-complete input handling
 function ReviewCompleteInput({
   onChat,
   onDone,

@@ -24,6 +24,7 @@ import {
   MIN_TERMINAL_COLUMNS,
   MIN_TERMINAL_ROWS,
 } from "@core/config";
+import { createSink } from "@core/outputSink";
 import { writeFileSync } from "fs";
 import picomatch from "picomatch";
 
@@ -43,6 +44,7 @@ interface CliOptions {
   yes?: boolean;
   chat?: boolean;
   importCollapse?: boolean;
+  json?: boolean;
 }
 
 async function validateGitRepo(): Promise<void> {
@@ -152,6 +154,7 @@ async function main(): Promise<void> {
       "Skip file selection, review all changes non-interactively"
     )
     .option("--no-chat", "Skip interactive chat, generate report immediately")
+    .option("--json", "Output structured NDJSON (use with --yes for CI)")
     .option("--init", "Show config file template")
     .parse();
 
@@ -212,11 +215,24 @@ async function main(): Promise<void> {
   const client = new CopilotClient({ logLevel: "error" });
   const generator = new ReviewGenerator(client);
   const progressRef = { current: INITIAL_PROGRESS_PHASE };
+  const sink = createSink(!!options.json);
+  let restoreTerminalUI: (() => void) | null = null;
 
   let stopping = false;
+  let inFullscreen = false;
+  const restoreTerminalIfNeeded = (): void => {
+    if (!inFullscreen) return;
+    if (restoreTerminalUI) {
+      restoreTerminalUI();
+    } else {
+      process.stdout.write("\x1b[?25h\x1b[?1049l");
+    }
+    inFullscreen = false;
+  };
   process.on("SIGINT", () => {
     if (stopping) return;
     stopping = true;
+    restoreTerminalIfNeeded();
     generator.stop().then(() => process.exit(130));
   });
 
@@ -236,9 +252,11 @@ async function main(): Promise<void> {
         process.exit(0);
       }
 
-      console.log(
-        chalk.cyan(`Reviewing ${reviewableFiles.length} file(s)...\n`)
-      );
+      if (!options.json) {
+        console.log(
+          chalk.cyan(`Reviewing ${reviewableFiles.length} file(s)...\n`)
+        );
+      }
 
       try {
         const rawResponse = await generator.review(
@@ -246,13 +264,20 @@ async function main(): Promise<void> {
           config,
           changes.branch,
           changes.stat,
-          (chunk: string) => process.stdout.write(chunk),
+          (chunk: string) => sink.chunk(chunk),
           (phase: ReviewProgressPhase) => {
             progressRef.current = phase;
+            sink.progress(phase);
           }
         );
 
-        console.log("\n");
+        if (options.verbose && generator.selectedModel) {
+          console.log(chalk.gray(`Model: ${generator.selectedModel}`));
+        }
+
+        if (!options.json) {
+          console.log("\n");
+        }
 
         const issues = parseReviewResponse(rawResponse);
 
@@ -266,28 +291,42 @@ async function main(): Promise<void> {
           startedAt: Date.now(),
         };
 
-        if (options.chat !== false) {
-          // Chat mode not available in non-interactive, just generate report
+        // Emit each issue via sink
+        for (const issue of issues) {
+          sink.issue(issue);
         }
+        sink.summary(session);
 
         const markdown = generatePrReviewMarkdown(session, config);
         writeFileSync(config.outputPath, markdown, "utf-8");
-        console.log(chalk.green(`\nReport saved to ${config.outputPath}`));
+
+        if (!options.json) {
+          console.log(chalk.green(`\nReport saved to ${config.outputPath}`));
+        }
 
         await generator.stop();
         process.exit(0);
       } catch (error) {
-        console.error(
-          chalk.gray(
-            `Stopped after ${progressStepToLabel(progressRef.current)}.`
-          )
-        );
-        reportError(error);
+        if (!options.json) {
+          console.error(
+            chalk.gray(
+              `Stopped after ${progressStepToLabel(progressRef.current)}.`
+            )
+          );
+        }
+        sink.error(error);
         await generator.stop();
         process.exit(1);
       }
     } else {
       // Interactive mode
+      if (options.json) {
+        console.error(
+          chalk.yellow("--json requires --yes for non-interactive mode.")
+        );
+        process.exit(1);
+      }
+
       if (!process.stdin.isTTY || !process.stdout.isTTY) {
         console.error(
           chalk.yellow(
@@ -314,6 +353,10 @@ async function main(): Promise<void> {
         const { Dashboard } = await import("@ui/features/dashboard");
         const { ErrorBoundary } = await import("@ui/components/ErrorBoundary");
         const { ReviewProvider } = await import("@ui/context/ReviewContext");
+        const { ClockProvider } = await import("@ui/hooks/useClock");
+        const { SyncOutputStream, enterFullscreen, restoreTerminal } =
+          await import("@ui/terminal");
+        restoreTerminalUI = restoreTerminal;
 
         const initialSession: ReviewSession = {
           selectedFiles: [],
@@ -324,13 +367,23 @@ async function main(): Promise<void> {
           startedAt: Date.now(),
         };
 
+        // Enter alternate screen buffer + hide cursor for flicker-free rendering
+        enterFullscreen();
+        inFullscreen = true;
+
+        // Wrap stdout in synchronized output stream (DEC 2026)
+        // so iTerm2 renders each frame atomically
+        const syncStdout = new SyncOutputStream(process.stdout);
+
         const dashboardProps = {
           gitFiles: filesToReview,
           version: VERSION,
           onComplete: () => {
+            restoreTerminalIfNeeded();
             process.exit(0);
           },
           onError: (error: Error) => {
+            restoreTerminalIfNeeded();
             generator.stop().then(() => {
               console.error(
                 chalk.gray(
@@ -344,24 +397,32 @@ async function main(): Promise<void> {
         };
 
         const { waitUntilExit } = render(
-          React.createElement(ErrorBoundary, {
-            onError: (error: Error) => {
-              generator.stop().then(() => {
-                reportError(error);
-                process.exit(1);
-              });
-            },
-            children: React.createElement(ReviewProvider, {
-              config,
-              generator,
-              initialSession,
-              children: React.createElement(Dashboard, dashboardProps),
-            }),
-          })
+          React.createElement(
+            ClockProvider,
+            null,
+            React.createElement(ErrorBoundary, {
+              onError: (error: Error) => {
+                restoreTerminalIfNeeded();
+                generator.stop().then(() => {
+                  reportError(error);
+                  process.exit(1);
+                });
+              },
+              children: React.createElement(ReviewProvider, {
+                config,
+                generator,
+                initialSession,
+                children: React.createElement(Dashboard, dashboardProps),
+              }),
+            })
+          ),
+          { stdout: syncStdout as unknown as NodeJS.WriteStream }
         );
 
         await waitUntilExit();
+        restoreTerminalIfNeeded();
       } catch (error) {
+        restoreTerminalIfNeeded();
         console.error(
           chalk.gray(
             `Stopped after ${progressStepToLabel(progressRef.current)}.`

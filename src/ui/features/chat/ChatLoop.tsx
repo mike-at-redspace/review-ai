@@ -14,7 +14,7 @@ import {
   buildRewritePrompt,
   parseReviewResponse,
 } from "@core/ai";
-import type { ReviewProgressPhase } from "@core/config";
+import type { ChatCommand, ReviewProgressPhase } from "@core/config";
 
 interface ChatLoopProps {
   onDone: () => void;
@@ -22,11 +22,35 @@ interface ChatLoopProps {
   maxHeight?: number;
 }
 
-const EXPAND_REGEX = /^(expand|detail)\s+#?(\d+)$/i;
-const IGNORE_REGEX = /^ignore\s+#?(\d+)$/i;
-const FOCUS_REGEX = /^focus\s+(.+)$/i;
-const REWRITE_REGEX = /^rewrite\s+#?(\d+)$/i;
-const DONE_REGEX = /^done$/i;
+export function parseChatCommand(input: string): ChatCommand {
+  const trimmed = input.trim();
+
+  if (/^done$/i.test(trimmed)) {
+    return { type: "done" };
+  }
+
+  const expandMatch = trimmed.match(/^(?:expand|detail)\s+#?(\d+)$/i);
+  if (expandMatch) {
+    return { type: "expand", issueId: parseInt(expandMatch[1], 10) };
+  }
+
+  const ignoreMatch = trimmed.match(/^ignore\s+#?(\d+)$/i);
+  if (ignoreMatch) {
+    return { type: "ignore", issueId: parseInt(ignoreMatch[1], 10) };
+  }
+
+  const focusMatch = trimmed.match(/^focus\s+(.+)$/i);
+  if (focusMatch) {
+    return { type: "focus", area: focusMatch[1] };
+  }
+
+  const rewriteMatch = trimmed.match(/^rewrite\s+#?(\d+)$/i);
+  if (rewriteMatch) {
+    return { type: "rewrite", issueId: parseInt(rewriteMatch[1], 10) };
+  }
+
+  return { type: "freeform", text: trimmed };
+}
 
 export function ChatLoop({ onDone, maxWidth, maxHeight }: ChatLoopProps) {
   const { session, generator, addChatMessage, ignoreIssue, updateSession } =
@@ -86,72 +110,70 @@ export function ChatLoop({ onDone, maxWidth, maxHeight }: ChatLoopProps) {
     [generator, addChatMessage, session.issues, updateSession]
   );
 
+  const findIssue = useCallback(
+    (id: number) => session.issues.find((i) => i.id === id),
+    [session.issues]
+  );
+
   const handleInput = useCallback(
     (input: string) => {
-      // Done
-      if (DONE_REGEX.test(input)) {
-        onDone();
-        return;
-      }
+      const command = parseChatCommand(input);
 
-      // Ignore
-      const ignoreMatch = input.match(IGNORE_REGEX);
-      if (ignoreMatch) {
-        const id = parseInt(ignoreMatch[2], 10);
-        const issue = session.issues.find((i) => i.id === id);
-        if (issue) {
-          ignoreIssue(id);
-          addChatMessage({
-            role: "user",
-            content: `ignore #${id}`,
-          });
-        } else {
-          setError(
-            `Issue #${id} not found. Available: #${session.issues.map((i) => i.id).join(", #")}`
-          );
+      switch (command.type) {
+        case "done":
+          onDone();
+          return;
+
+        case "ignore": {
+          const issue = findIssue(command.issueId);
+          if (issue) {
+            ignoreIssue(command.issueId);
+            addChatMessage({
+              role: "user",
+              content: `ignore #${command.issueId}`,
+            });
+          } else {
+            setError(
+              `Issue #${command.issueId} not found. Available: #${session.issues.map((i) => i.id).join(", #")}`
+            );
+          }
+          return;
         }
-        return;
-      }
 
-      addChatMessage({ role: "user", content: input });
-
-      // Expand
-      const expandMatch = input.match(EXPAND_REGEX);
-      if (expandMatch) {
-        const id = parseInt(expandMatch[2], 10);
-        const issue = session.issues.find((i) => i.id === id);
-        if (issue) {
-          sendToAi(buildExpandPrompt(issue));
-        } else {
-          setError(`Issue #${id} not found.`);
+        case "expand": {
+          addChatMessage({ role: "user", content: input });
+          const issue = findIssue(command.issueId);
+          if (issue) {
+            sendToAi(buildExpandPrompt(issue));
+          } else {
+            setError(`Issue #${command.issueId} not found.`);
+          }
+          return;
         }
-        return;
-      }
 
-      // Focus
-      const focusMatch = input.match(FOCUS_REGEX);
-      if (focusMatch) {
-        sendToAi(buildFocusPrompt(focusMatch[1]));
-        return;
-      }
+        case "focus":
+          addChatMessage({ role: "user", content: input });
+          sendToAi(buildFocusPrompt(command.area));
+          return;
 
-      // Rewrite
-      const rewriteMatch = input.match(REWRITE_REGEX);
-      if (rewriteMatch) {
-        const id = parseInt(rewriteMatch[2], 10);
-        const issue = session.issues.find((i) => i.id === id);
-        if (issue) {
-          sendToAi(buildRewritePrompt(issue));
-        } else {
-          setError(`Issue #${id} not found.`);
+        case "rewrite": {
+          addChatMessage({ role: "user", content: input });
+          const issue = findIssue(command.issueId);
+          if (issue) {
+            sendToAi(buildRewritePrompt(issue));
+          } else {
+            setError(`Issue #${command.issueId} not found.`);
+          }
+          return;
         }
-        return;
-      }
 
-      // Freeform
-      sendToAi(input);
+        case "freeform":
+          addChatMessage({ role: "user", content: input });
+          sendToAi(command.text);
+          return;
+      }
     },
-    [onDone, session.issues, ignoreIssue, addChatMessage, sendToAi]
+    [onDone, findIssue, session.issues, ignoreIssue, addChatMessage, sendToAi]
   );
 
   const recentMessages = session.chatHistory.slice(-6);

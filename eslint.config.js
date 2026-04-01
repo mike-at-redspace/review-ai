@@ -3,7 +3,9 @@ import tseslint from "typescript-eslint";
 import eslintConfigPrettier from "eslint-config-prettier/flat";
 
 export default tseslint.config(
-  { ignores: ["dist/**", "node_modules/**", "pnpm-lock.yaml"] },
+  {
+    ignores: ["dist/**", "node_modules/**", "claude-src/**", "pnpm-lock.yaml"],
+  },
   js.configs.recommended,
   ...tseslint.configs.recommended,
   {

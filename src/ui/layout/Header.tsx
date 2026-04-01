@@ -2,6 +2,7 @@ import React from "react";
 import { Box, Text } from "ink";
 import { LOGO_ANIMATION_COLORS, LOGO_LINES, VERSION } from "@core/config";
 import { useLogoAnimation } from "@ui/hooks/useLogoAnimation";
+import { Byline } from "./Byline.js";
 
 const BRANCH_MAX_LENGTH = 25;
 const BRANCH_MIN_DISPLAY_LEN = 10;
@@ -18,7 +19,12 @@ interface HeaderProps {
   maxWidth?: number;
 }
 
-export function Header({ branch, version = VERSION, maxWidth }: HeaderProps) {
+// Memoize to prevent logo animation from re-rendering parent tree
+export const Header = React.memo(function Header({
+  branch,
+  version = VERSION,
+  maxWidth,
+}: HeaderProps) {
   const tick = useLogoAnimation();
   const reservedForVersion = 4 + String(version).length;
   const branchMaxLen =
@@ -42,9 +48,7 @@ export function Header({ branch, version = VERSION, maxWidth }: HeaderProps) {
           </Text>
         ))}
       </Box>
-      <Text color="gray">
-        v{version} [{displayBranch}]
-      </Text>
+      <Byline items={[`v${version}`, displayBranch]} />
     </Box>
   );
-}
+});

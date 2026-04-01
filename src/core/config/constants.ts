@@ -4,13 +4,13 @@ export const VERSION = "1.0.0";
 export const CONFIG_FILENAME = ".review-ai.json";
 export const MAX_GIT_BUFFER_SIZE = 10 * 1024 * 1024;
 export const MAX_DIFF_LENGTH = 8000;
-export const COPILOT_SESSION_TIMEOUT = 60000;
-export const DEFAULT_COPILOT_MODEL = "gpt-5-mini";
+export const CHARS_PER_TOKEN = 3.5;
+export const COPILOT_SESSION_TIMEOUT = 120000;
+export const DEFAULT_COPILOT_MODEL = "auto";
 export const DEFAULT_PREMIUM_MODEL = "gpt-5.3-codex";
 export const DEFAULT_RECENT_COMMITS_COUNT = 5;
 export const MIN_TERMINAL_COLUMNS = 60;
 export const MIN_TERMINAL_ROWS = 20;
-export const LOGO_ANIMATION_INTERVAL_MS = 280;
 
 export const LOGO_ANIMATION_COLORS = [
   "green",

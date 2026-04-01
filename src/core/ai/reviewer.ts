@@ -2,15 +2,17 @@ import { CopilotClient, approveAll } from "@github/copilot-sdk";
 import type { ReviewConfig, ReviewProgressPhase } from "@core/config";
 import { COPILOT_SESSION_TIMEOUT } from "@core/config";
 import {
-  REVIEW_SYSTEM_PROMPT,
+  buildSystemPrompt,
   buildReviewPrompt,
   getEffectiveDiffLimit,
 } from "./prompt.js";
+import { selectModel } from "./modelSelector.js";
 import { getSmartDiff } from "@core/git";
 
 export class ReviewGenerator {
   private session: Awaited<ReturnType<CopilotClient["createSession"]>> | null =
     null;
+  public selectedModel: string | null = null;
 
   constructor(private client: CopilotClient) {}
 
@@ -40,14 +42,17 @@ export class ReviewGenerator {
       wasTruncated
     );
 
+    const model = selectModel(content, config);
+    this.selectedModel = model;
+
     onProgress?.("session");
     this.session = await this.client.createSession({
-      model: config.model,
+      model,
       streaming: true,
       onPermissionRequest: approveAll,
       systemMessage: {
         mode: "replace",
-        content: REVIEW_SYSTEM_PROMPT,
+        content: buildSystemPrompt(config),
       },
     });
 

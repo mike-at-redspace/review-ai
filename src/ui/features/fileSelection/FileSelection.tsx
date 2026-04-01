@@ -6,6 +6,7 @@ interface FileSelectionProps {
   files: ChangedFile[];
   onConfirm: (selectedPaths: string[]) => void;
   maxHeight: number;
+  maxWidth?: number;
 }
 
 const STATUS_COLORS: Record<string, string> = {
@@ -26,10 +27,33 @@ const STATUS_LABELS: Record<string, string> = {
 const CHROME_LINES = 4;
 const MIN_VISIBLE = 5;
 
-export function FileSelection({
+// Prefix: "> [x] [mod] " = 14 chars, plus paddingX={1} on each Box = 2
+const FILE_ROW_PREFIX_WIDTH = 14;
+const FILE_ROW_PADDING = 2;
+
+function truncatePath(path: string, maxLen: number): string {
+  if (path.length <= maxLen || maxLen < 10) return path;
+  // Keep filename, truncate directory prefix with ellipsis
+  const lastSlash = path.lastIndexOf("/");
+  if (lastSlash === -1) {
+    // No directory — truncate end
+    return path.slice(0, maxLen - 3) + "...";
+  }
+  const filename = path.slice(lastSlash + 1);
+  if (filename.length >= maxLen - 4) {
+    // Filename alone is too long
+    return "..." + filename.slice(-(maxLen - 3));
+  }
+  const dirBudget = maxLen - filename.length - 4; // 4 = ".../".length
+  const dir = path.slice(0, lastSlash);
+  return dir.slice(0, dirBudget) + "/.../" + filename;
+}
+
+export const FileSelection = React.memo(function FileSelection({
   files,
   onConfirm,
   maxHeight,
+  maxWidth,
 }: FileSelectionProps) {
   const reviewableFiles = files.filter((f) => !f.binary);
   const binaryFiles = files.filter((f) => f.binary);
@@ -45,6 +69,11 @@ export function FileSelection({
     maxHeight - CHROME_LINES - binaryOverhead
   );
   const needsScroll = reviewableFiles.length > maxVisible;
+
+  // Max chars available for file path text
+  const pathMaxLen = maxWidth
+    ? maxWidth - FILE_ROW_PREFIX_WIDTH - FILE_ROW_PADDING
+    : 999;
 
   // Compute the visible window, keeping cursor in view
   const { windowStart, windowEnd } = useMemo(() => {
@@ -136,6 +165,10 @@ export function FileSelection({
         const actualIndex = windowStart + visibleIndex;
         const isSelected = selected.has(file.path);
         const isCursor = actualIndex === cursor;
+        const displayPath = truncatePath(
+          file.path,
+          file.staged ? pathMaxLen - 9 : pathMaxLen
+        );
         return (
           <Box key={file.path} paddingX={1}>
             <Text color={isCursor ? "cyan" : "white"}>
@@ -147,7 +180,7 @@ export function FileSelection({
             <Text color={STATUS_COLORS[file.status] ?? "white"}>
               [{STATUS_LABELS[file.status] ?? file.status}]{" "}
             </Text>
-            <Text color={file.staged ? "cyan" : "white"}>{file.path}</Text>
+            <Text color={file.staged ? "cyan" : "white"}>{displayPath}</Text>
             {file.staged && <Text color="gray"> (staged)</Text>}
           </Box>
         );
@@ -169,7 +202,7 @@ export function FileSelection({
           {binaryFiles.map((file) => (
             <Box key={file.path} paddingX={2}>
               <Text color="gray" dimColor>
-                {file.path}
+                {truncatePath(file.path, pathMaxLen)}
               </Text>
             </Box>
           ))}
@@ -181,4 +214,4 @@ export function FileSelection({
       </Box>
     </Box>
   );
-}
+});

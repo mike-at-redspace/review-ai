@@ -1,7 +1,5 @@
 import type { ReviewConfig, ReviewIssue } from "@core/config";
-import { MAX_DIFF_LENGTH } from "@core/config";
-
-const CHARS_PER_TOKEN = 3.5;
+import { CHARS_PER_TOKEN, MAX_DIFF_LENGTH } from "@core/config";
 
 export function getEffectiveDiffLimit(config: ReviewConfig): number {
   const charLimit = config.maxDiffLength ?? MAX_DIFF_LENGTH;
@@ -11,7 +9,9 @@ export function getEffectiveDiffLimit(config: ReviewConfig): number {
   return Math.min(charLimit, maxCharsFromTokens);
 }
 
-export const REVIEW_SYSTEM_PROMPT = `You are a senior code reviewer performing a thorough review of uncommitted changes.
+// --- System Prompt Composition ---
+
+const BASE_SYSTEM_PROMPT = `You are a senior code reviewer performing a thorough review of uncommitted changes.
 
 Your mission: find real issues that matter — bugs, security holes, performance problems, and maintainability concerns. Skip trivial style nitpicks unless they indicate deeper problems.
 
@@ -58,6 +58,29 @@ Rules:
 - If the diff is truncated or you cannot see the full contents of a file, do NOT flag issues about code you cannot see. Only review what is visible. Do not hallucinate or guess about hidden content
 - Group related issues when they share a root cause
 - Do NOT wrap the entire response in markdown code fences`;
+
+function buildFocusSection(config: ReviewConfig): string {
+  if (config.focusCategories.length === 0) return "";
+  return `\n\nFocus especially on: ${config.focusCategories.join(", ")}`;
+}
+
+function buildSeveritySection(config: ReviewConfig): string {
+  if (config.minSeverity === "nitpick") return "";
+  const severityOrder = ["critical", "warning", "info", "nitpick"];
+  const minIndex = severityOrder.indexOf(config.minSeverity);
+  const included = severityOrder.slice(0, minIndex + 1);
+  return `\n\nOnly report issues at severity: ${included.join(", ")}`;
+}
+
+export function buildSystemPrompt(config: ReviewConfig): string {
+  return (
+    BASE_SYSTEM_PROMPT +
+    buildSeveritySection(config) +
+    buildFocusSection(config)
+  );
+}
+
+// --- User Message Assembly ---
 
 export function buildReviewPrompt(
   diff: string,
