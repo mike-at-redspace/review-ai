@@ -1,0 +1,56 @@
+{
+  "name": "review-ai",
+  "version": "1.0.0",
+  "description": "AI-powered code review for uncommitted changes using GitHub Copilot",
+  "type": "module",
+  "bin": {
+    "review-ai": "./dist/cli.js"
+  },
+  "scripts": {
+    "build": "tsc && tsc-alias -p tsconfig.json",
+    "start": "node dist/cli.js",
+    "dev": "tsx src/cli.ts",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix"
+  },
+  "keywords": [
+    "git",
+    "code-review",
+    "ai",
+    "cli",
+    "copilot"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "@github/copilot-sdk": "0.1.33-unstable.1",
+    "chalk": "^5.6.2",
+    "commander": "^14.0.2",
+    "ink": "^4.4.1",
+    "ink-spinner": "^5.0.0",
+    "ink-text-input": "^5.0.0",
+    "picomatch": "^4.0.4",
+    "react": "^18.3.1"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.15.0",
+    "@types/node": "^25.0.0",
+    "@types/picomatch": "^4.0.2",
+    "@types/react": "^18.3.0",
+    "eslint": "^9.15.0",
+    "eslint-config-prettier": "^10.1.8",
+    "prettier": "^3.4.2",
+    "tsc-alias": "^1.8.10",
+    "tsx": "^4.21.0",
+    "typescript": "^5.9.0",
+    "typescript-eslint": "^8.15.0",
+    "vitest": "^2.1.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
