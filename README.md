@@ -6,6 +6,12 @@ Review your local Git changes before you commit. Pick files, stream AI feedback,
 | -------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
 | <img src="https://github.com/user-attachments/assets/1576e276-a01e-4426-b912-88ed5855e023" width="100%"> | <img src="https://github.com/user-attachments/assets/10ed8cc5-86a7-484d-a438-44d3dc8aa0ba" width="100%"> |
 
+
+#### Exposes Copilot SDK's `read_file`
+
+<img width="1003" height="412" alt="image" src="https://github.com/user-attachments/assets/5223626c-083b-48e2-9600-b503b2047acd" />
+
+
 ## Requirements
 
 - Node.js >= 20
