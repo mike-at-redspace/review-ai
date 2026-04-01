@@ -1,9 +1,8 @@
 # review-ai
 
-An interactive terminal UI for reviewing your working changes before committing. Select files, get a streaming AI review, then chat with the reviewer to expand on issues, request rewrites, or focus on specific areas. Generates a `PR-REVIEW.md` report when done.
+Review your local Git changes before you commit. Pick files, stream AI feedback, then chat to drill in and generate `PR-REVIEW.md`.
 
 <img width="45%" height="auto" alt="image" src="https://github.com/user-attachments/assets/1576e276-a01e-4426-b912-88ed5855e023" />
-
 <img width="45%" height="730" alt="image" src="https://github.com/user-attachments/assets/10ed8cc5-86a7-484d-a438-44d3dc8aa0ba" />
 
 ## Requirements
@@ -19,73 +18,93 @@ pnpm run build
 pnpm link --global
 ```
 
-## Usage
+## Quick start
 
 ```bash
-# Interactive review of uncommitted changes
+# Interactive review of current changes
 review-ai
 
-# Review only staged changes
+# Review staged changes only
 review-ai --staged
 
-# Compare current branch against main
+# Compare branch to main
 review-ai --compare-to main
 
-# Non-interactive — review all files and generate report
+# Non-interactive run and write report
 review-ai -y --no-chat
 
-# Non-interactive JSON stream (NDJSON) for CI
+# Non-interactive NDJSON stream (CI)
 review-ai -y --json
-
-# Use a specific model
-review-ai --model gpt-5.3-codex
-
-# Filter to specific files (glob patterns)
-review-ai --files "src/core/**/*.ts"
-
-# Focus on security and performance issues only
-review-ai --focus security performance
-
-# Only show warnings and above
-review-ai -s warning
 ```
 
-## Interactive Mode
+## Interactive flow
 
-1. **File selection** — choose which files to include in the review. Arrow keys to navigate, Space to toggle, A to select all, Enter to confirm.
-2. **Streaming review** — the AI reviews your changes in real-time, outputting structured issues with severity levels.
-3. **Chat loop** — interact with the reviewer:
-   - Ask to **expand** on any issue for more detail
-   - **Ignore** issues you disagree with
-   - **Focus** on a specific area (e.g. "focus on error handling")
-   - Request a **rewrite** of problematic code
-   - Type **done** to generate the report
-4. **Review complete** — on the summary screen, press **Enter** to open chat or **D** to write the report immediately.
+1. Select files (arrows, `Space`, `A`, `Enter`)
+2. Watch streaming review output
+3. Chat with commands like `expand #3`, `rewrite #2`, `focus security`, `ignore #4`, `done`
+4. On summary screen: `Enter` opens chat, `D` writes report
 
-## CLI Options
+## CLI options
 
-| Option                    | Description                                                                        |
-| ------------------------- | ---------------------------------------------------------------------------------- |
-| `-a, --all`               | Include all changes (staged + unstaged + untracked)                                |
-| `--staged`                | Review only staged changes                                                         |
-| `--compare-to <branch>`   | Compare current branch to a base branch (e.g. main)                                |
-| `--files <patterns...>`   | Only review specific files (glob patterns)                                         |
-| `-s, --severity <level>`  | Minimum severity: `critical`, `warning`, `info`, `nitpick`                         |
-| `--focus <categories...>` | Focus on: `bug`, `smell`, `architecture`, `performance`, `readability`, `security` |
-| `-o, --output <path>`     | Output path for report (default: `./PR-REVIEW.md`)                                 |
-| `--model <name>`          | Override Copilot model                                                             |
-| `--max-diff-length <n>`   | Max diff length in characters before truncation                                    |
-| `--max-diff-tokens <n>`   | Max diff size in estimated tokens                                                  |
-| `--no-import-collapse`    | Disable import line collapsing                                                     |
-| `-v, --verbose`           | Show verbose output                                                                |
-| `-y, --yes`               | Skip file selection, review all changes non-interactively                          |
-| `--json`                  | Output structured NDJSON events (requires `--yes`)                                 |
-| `--no-chat`               | Skip interactive chat, generate report immediately                                 |
-| `--init`                  | Show config file template                                                          |
+| Option                    | Description                                                                       |
+| ------------------------- | --------------------------------------------------------------------------------- |
+| `-a, --all`               | Include staged + unstaged + untracked                                             |
+| `--staged`                | Review staged changes only                                                        |
+| `--compare-to <branch>`   | Compare current branch to base (example: `main`)                                  |
+| `--files <patterns...>`   | Review matching files only (glob patterns)                                        |
+| `-s, --severity <level>`  | Minimum severity: `critical`, `warning`, `info`, `nitpick`                        |
+| `--focus <categories...>` | Focus on `bug`, `smell`, `architecture`, `performance`, `readability`, `security` |
+| `-o, --output <path>`     | Report path (default: `./PR-REVIEW.md`)                                           |
+| `--model <name>`          | Force a specific Copilot model                                                    |
+| `--max-diff-length <n>`   | Max diff length before truncation                                                 |
+| `--max-diff-tokens <n>`   | Max estimated diff tokens                                                         |
+| `--no-import-collapse`    | Disable import collapsing                                                         |
+| `-v, --verbose`           | Verbose logs                                                                      |
+| `-y, --yes`               | Skip file picker (non-interactive)                                                |
+| `--json`                  | Output NDJSON events (requires `--yes`)                                           |
+| `--no-chat`               | Skip chat and write report right away                                             |
+| `--init`                  | Print config template                                                             |
+
+## Model selection
+
+Use `--model <name>` to force a model, or set `"model"` in config.  
+Default is `"model": "auto"`.
+
+- Small diffs (~8k tokens or less): `gpt-5-mini`
+- Larger diffs: uses `premiumModel` when set
+- If `premiumModel` is not set: picks smallest model tier that fits
+- `REVIEW_AI_MODEL` env var overrides config
+
+### `--model` values (Copilot picker snapshot, April 1, 2026)
+
+| CLI string (`--model`) | Context size | Relative cost |
+| ---------------------- | ------------ | ------------- |
+| `claude-haiku-4-5`     | 200K         | 0.33x         |
+| `claude-opus-4-5`      | 200K         | 3x            |
+| `claude-opus-4-6`      | 200K         | 3x            |
+| `claude-sonnet-4`      | 144K         | 1x            |
+| `claude-sonnet-4-5`    | 200K         | 1x            |
+| `claude-sonnet-4-6`    | 200K         | 1x            |
+| `gemini-2.5-pro`       | 173K         | 1x            |
+| `gemini-3-flash`       | 173K         | 0.33x         |
+| `gemini-3.1-pro`       | 200K         | 1x            |
+| `gpt-4.1`              | 128K         | 0x            |
+| `gpt-4o`               | 68K          | 0x            |
+| `gpt-5-mini`           | 192K         | 0.33x         |
+| `gpt-5.1`              | 192K         | 1x            |
+| `gpt-5.1-codex`        | 256K         | 1x            |
+| `gpt-5.1-codex-max`    | 256K         | 1x            |
+| `gpt-5.1-codex-mini`   | 256K         | 0.33x         |
+| `gpt-5.2`              | 400K         | 1x            |
+| `gpt-5.2-codex`        | 400K         | 1x            |
+| `gpt-5.3-codex`        | 400K         | 1x            |
+| `gpt-5.4`              | 400K         | 1x            |
+| `gpt-5.4-mini`         | 400K         | 0.33x         |
+| `grok-code-fast-1`     | 256K         | 0.25x         |
 
 ## Configuration
 
-Create a `.review-ai.json` in your project root or home directory:
+Create `.review-ai.json` in your project root or home directory:
 
 ```json
 {
@@ -101,43 +120,26 @@ Create a `.review-ai.json` in your project root or home directory:
 }
 ```
 
-Run `review-ai --init` to print the full config template.
+Run `review-ai --init` to print the full template.
 
-The `REVIEW_AI_MODEL` environment variable overrides the model setting.
+## NDJSON output (`--json`)
 
-Model behavior:
+Use with `--yes`. Events written to stdout:
 
-- `"model": "auto"` uses `gpt-5-mini` for small diffs.
-- For larger diffs, `premiumModel` is used when set (default: `gpt-5.3-codex`).
-- Passing `--model` always overrides config model selection.
-
-## NDJSON Output (`--json`)
-
-Use `--json` with `--yes` to stream machine-readable events to stdout:
-
-- `progress` — current review phase (`session`, `sending`, `streaming`, `parsing`)
-- `chunk` — streamed model text chunk
-- `issue` — parsed issue object
-- `summary` — totals and selected files
-- `error` — terminal error message
-
-## Severity Levels
-
-| Level      | Meaning                                      |
-| ---------- | -------------------------------------------- |
-| `critical` | Bugs, data loss, or security vulnerabilities |
-| `warning`  | Likely problems or maintainability concerns  |
-| `info`     | Worth improving but not urgent               |
-| `nitpick`  | Style or preference                          |
+- `progress` (`session`, `sending`, `streaming`, `parsing`)
+- `chunk`
+- `issue`
+- `summary`
+- `error`
 
 ## Development
 
 ```bash
-pnpm run dev          # Run with tsx (no build needed)
-pnpm run build        # Compile TypeScript
-pnpm run lint         # ESLint
-pnpm run format       # Prettier
-pnpm test             # Vitest
+pnpm run dev
+pnpm run build
+pnpm run lint
+pnpm run format
+pnpm test
 ```
 
 ## License
