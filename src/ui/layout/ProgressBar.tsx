@@ -9,6 +9,23 @@ import { useAnimationFrame } from "@ui/hooks";
 const SPINNER_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
 const SPINNER_INTERVAL_MS = 80;
 
+const PHASES_WITH_MODEL: ReviewProgressPhase[] = [
+  "session",
+  "sending",
+  "streaming",
+];
+
+function spinnerLabel(
+  phase: ReviewProgressPhase,
+  model?: string | null
+): string {
+  const base = PROGRESS_SPINNER_LABELS[phase] ?? phase;
+  if (!model?.trim() || !PHASES_WITH_MODEL.includes(phase)) {
+    return base;
+  }
+  return base.replace(/\.\.\.$/, ` (${model})...`);
+}
+
 function AnimatedSpinner() {
   const time = useAnimationFrame(SPINNER_INTERVAL_MS);
   const frame = Math.floor(time / SPINNER_INTERVAL_MS) % SPINNER_FRAMES.length;
@@ -17,6 +34,8 @@ function AnimatedSpinner() {
 
 interface ProgressBarProps {
   phase?: ReviewProgressPhase;
+  /** Copilot model id (shown during session / send / stream). */
+  model?: string | null;
   isGenerating: boolean;
   error?: string;
   status?: string;
@@ -24,6 +43,7 @@ interface ProgressBarProps {
 
 export function ProgressBar({
   phase,
+  model,
   isGenerating,
   error,
   status,
@@ -40,7 +60,7 @@ export function ProgressBar({
     return (
       <Box paddingX={1} marginTop={1}>
         <AnimatedSpinner />
-        <Text color="gray"> {PROGRESS_SPINNER_LABELS[phase]}</Text>
+        <Text color="gray"> {spinnerLabel(phase, model)}</Text>
       </Box>
     );
   }

@@ -6,6 +6,7 @@ export const MAX_GIT_BUFFER_SIZE = 10 * 1024 * 1024;
 export const MAX_DIFF_LENGTH = 8000;
 export const CHARS_PER_TOKEN = 3.5;
 export const COPILOT_SESSION_TIMEOUT = 120000;
+export const COPILOT_CLIENT_STOP_TIMEOUT_MS = 5000;
 export const DEFAULT_COPILOT_MODEL = "auto";
 export const DEFAULT_PREMIUM_MODEL = "gpt-5.3-codex";
 export const DEFAULT_RECENT_COMMITS_COUNT = 5;

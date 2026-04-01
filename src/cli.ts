@@ -4,7 +4,7 @@ import { program } from "commander";
 import chalk from "chalk";
 import { CopilotClient } from "@github/copilot-sdk";
 import { getConfigTemplate, loadConfig } from "@core/config";
-import { getAllChanges, isGitRepository } from "@core/git";
+import { getAllChanges, getGitRepoRoot, isGitRepository } from "@core/git";
 import {
   generatePrReviewMarkdown,
   parseReviewResponse,
@@ -64,6 +64,13 @@ function reportError(error: unknown): void {
     console.error(chalk.red(`Error: ${error.message}`));
   } else {
     console.error(chalk.red("An unexpected error occurred"));
+  }
+}
+
+function logGeneratorStopErrors(errors: Error[], verbose?: boolean): void {
+  if (!verbose || errors.length === 0) return;
+  for (const err of errors) {
+    console.error(chalk.gray(`Copilot cleanup: ${err.message}`));
   }
 }
 
@@ -167,6 +174,7 @@ async function main(): Promise<void> {
   }
 
   await validateGitRepo();
+  const repoRoot = await getGitRepoRoot();
 
   const config = loadConfig();
   applyOptionOverrides(options, config);
@@ -221,7 +229,9 @@ async function main(): Promise<void> {
   }
 
   const client = new CopilotClient({ logLevel: "error" });
-  const generator = new ReviewGenerator(client);
+  const generator = new ReviewGenerator(client, {
+    workingDirectory: repoRoot,
+  });
   const progressRef = { current: INITIAL_PROGRESS_PHASE };
   const sink = createSink(!!options.json);
   let restoreTerminalUI: (() => void) | null = null;
@@ -241,7 +251,10 @@ async function main(): Promise<void> {
     if (stopping) return;
     stopping = true;
     restoreTerminalIfNeeded();
-    generator.stop().then(() => process.exit(130));
+    generator.stop().then((errs) => {
+      logGeneratorStopErrors(errs, options.verbose);
+      process.exit(130);
+    });
   });
 
   const isNonInteractive = options.yes;
@@ -312,7 +325,7 @@ async function main(): Promise<void> {
           console.log(chalk.green(`\nReport saved to ${config.outputPath}`));
         }
 
-        await generator.stop();
+        logGeneratorStopErrors(await generator.stop(), options.verbose);
         process.exit(0);
       } catch (error) {
         if (!options.json) {
@@ -323,7 +336,7 @@ async function main(): Promise<void> {
           );
         }
         sink.error(error);
-        await generator.stop();
+        logGeneratorStopErrors(await generator.stop(), options.verbose);
         process.exit(1);
       }
     } else {
@@ -392,7 +405,8 @@ async function main(): Promise<void> {
           },
           onError: (error: Error) => {
             restoreTerminalIfNeeded();
-            generator.stop().then(() => {
+            generator.stop().then((errs) => {
+              logGeneratorStopErrors(errs, options.verbose);
               console.error(
                 chalk.gray(
                   `Stopped after ${progressStepToLabel(progressRef.current)}.`
@@ -411,7 +425,8 @@ async function main(): Promise<void> {
             React.createElement(ErrorBoundary, {
               onError: (error: Error) => {
                 restoreTerminalIfNeeded();
-                generator.stop().then(() => {
+                generator.stop().then((errs) => {
+                  logGeneratorStopErrors(errs, options.verbose);
                   reportError(error);
                   process.exit(1);
                 });
@@ -437,12 +452,12 @@ async function main(): Promise<void> {
           )
         );
         reportError(error);
-        await generator.stop();
+        logGeneratorStopErrors(await generator.stop(), options.verbose);
         process.exit(1);
       }
     }
   } finally {
-    await generator.stop();
+    logGeneratorStopErrors(await generator.stop(), options.verbose);
   }
 }
 

@@ -1,6 +1,9 @@
 import { approveAll, CopilotClient } from "@github/copilot-sdk";
 import type { ReviewConfig, ReviewProgressPhase } from "@core/config";
-import { COPILOT_SESSION_TIMEOUT } from "@core/config";
+import {
+  COPILOT_CLIENT_STOP_TIMEOUT_MS,
+  COPILOT_SESSION_TIMEOUT,
+} from "@core/config";
 import {
   buildReviewPrompt,
   buildSystemPrompt,
@@ -9,12 +12,20 @@ import {
 import { selectModel } from "./modelSelector.js";
 import { getSmartDiff } from "@core/git";
 
+export interface ReviewGeneratorOptions {
+  /** Git repo root; Copilot tool paths resolve relative to this directory. */
+  workingDirectory?: string;
+}
+
 export class ReviewGenerator {
   private session: Awaited<ReturnType<CopilotClient["createSession"]>> | null =
     null;
   public selectedModel: string | null = null;
 
-  constructor(private client: CopilotClient) {}
+  constructor(
+    private client: CopilotClient,
+    private readonly generatorOptions: ReviewGeneratorOptions = {}
+  ) {}
 
   async review(
     diff: string,
@@ -47,6 +58,7 @@ export class ReviewGenerator {
 
     onProgress?.("session");
     this.session = await this.client.createSession({
+      clientName: "review-ai",
       model,
       streaming: true,
       onPermissionRequest: approveAll,
@@ -54,6 +66,9 @@ export class ReviewGenerator {
         mode: "replace",
         content: buildSystemPrompt(config),
       },
+      ...(this.generatorOptions.workingDirectory
+        ? { workingDirectory: this.generatorOptions.workingDirectory }
+        : {}),
     });
 
     return this.runWithSession(this.session, prompt, onChunk, onProgress);
@@ -79,40 +94,37 @@ export class ReviewGenerator {
     let fullRawMessage = "";
     let hasReportedStreaming = false;
 
-    const done = new Promise<void>((resolve) => {
-      session.on((event: { type: string; data?: unknown }) => {
-        const data = event.data as
-          | { deltaContent?: string; content?: string }
-          | undefined;
-        if (event.type === "assistant.message_delta" && data?.deltaContent) {
-          if (!hasReportedStreaming) {
-            hasReportedStreaming = true;
-            onProgress?.("streaming");
-          }
-          const chunk = data.deltaContent;
-          fullRawMessage += chunk;
-          onChunk?.(chunk);
-        } else if (event.type === "assistant.message" && data?.content) {
-          if (!fullRawMessage) {
-            fullRawMessage = data.content;
-          }
-        } else if (event.type === "session.idle") {
-          resolve();
+    const unsubscribe = session.on((event) => {
+      const data = event.data as
+        | { deltaContent?: string; content?: string }
+        | undefined;
+      if (event.type === "assistant.message_delta" && data?.deltaContent) {
+        if (!hasReportedStreaming) {
+          hasReportedStreaming = true;
+          onProgress?.("streaming");
         }
-      });
+        const chunk = data.deltaContent;
+        fullRawMessage += chunk;
+        onChunk?.(chunk);
+      } else if (event.type === "assistant.message" && data?.content) {
+        if (!fullRawMessage) {
+          fullRawMessage = data.content;
+        }
+      }
     });
 
-    onProgress?.("sending");
-    await session.send({ prompt });
-    await Promise.race([
-      done,
-      new Promise((_, reject) =>
-        setTimeout(
-          () => reject(new Error("Session timeout")),
-          COPILOT_SESSION_TIMEOUT
-        )
-      ),
-    ]);
+    try {
+      onProgress?.("sending");
+      const finalEvent = await session.sendAndWait(
+        { prompt },
+        COPILOT_SESSION_TIMEOUT
+      );
+      if (!fullRawMessage.trim() && finalEvent?.data?.content) {
+        fullRawMessage = finalEvent.data.content;
+      }
+    } finally {
+      unsubscribe();
+    }
 
     const rawMessage = fullRawMessage.trim();
     if (!rawMessage) {
@@ -121,20 +133,38 @@ export class ReviewGenerator {
     return rawMessage;
   }
 
-  async stop(): Promise<void> {
+  /**
+   * Disconnects the Copilot session and stops the client. Returns cleanup errors
+   * (e.g. from {@link CopilotClient.stop}); empty if everything succeeded.
+   */
+  async stop(): Promise<Error[]> {
+    const errors: Error[] = [];
     try {
       if (this.session) {
-        await this.session.destroy();
+        try {
+          await this.session.disconnect();
+        } catch (e) {
+          errors.push(e instanceof Error ? e : new Error(String(e)));
+        }
         this.session = null;
       }
-      await Promise.race([
-        this.client.stop(),
-        new Promise((_, reject) =>
-          setTimeout(() => reject(new Error("Stop timeout")), 1000)
-        ),
-      ]);
-    } catch {
-      // Ignore errors during stop
+      try {
+        const stopErrors = await Promise.race([
+          this.client.stop(),
+          new Promise<never>((_, reject) =>
+            setTimeout(
+              () => reject(new Error("Stop timeout")),
+              COPILOT_CLIENT_STOP_TIMEOUT_MS
+            )
+          ),
+        ]);
+        errors.push(...stopErrors);
+      } catch (e) {
+        errors.push(e instanceof Error ? e : new Error(String(e)));
+      }
+    } catch (e) {
+      errors.push(e instanceof Error ? e : new Error(String(e)));
     }
+    return errors;
   }
 }

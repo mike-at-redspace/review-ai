@@ -9,8 +9,8 @@ importers:
   .:
     dependencies:
       '@github/copilot-sdk':
-        specifier: 0.1.33-unstable.1
-        version: 0.1.33-unstable.1
+        specifier: 0.2.0
+        version: 0.2.0
       chalk:
         specifier: ^5.6.2
         version: 5.6.2
@@ -429,8 +429,8 @@ packages:
     os: [linux]
     hasBin: true
 
-  '@github/copilot-sdk@0.1.33-unstable.1':
-    resolution: {integrity: sha512-8gdu3giSv0328+89FfOA4JwyM+ZF1JyBJr/vdGnCMvBdYayWdVsKzBo4udSqTIm5JL6piGA25cRh9WdunxPb6w==}
+  '@github/copilot-sdk@0.2.0':
+    resolution: {integrity: sha512-fCEpD9W9xqcaCAJmatyNQ1PkET9P9liK2P4Vk0raDFoMXcvpIdqewa5JQeKtWCBUsN/HCz7ExkkFP8peQuo+DA==}
     engines: {node: '>=20.0.0'}
 
   '@github/copilot-win32-arm64@1.0.12':
@@ -1782,7 +1782,7 @@ snapshots:
   '@github/copilot-linux-x64@1.0.12':
     optional: true
 
-  '@github/copilot-sdk@0.1.33-unstable.1':
+  '@github/copilot-sdk@0.2.0':
     dependencies:
       '@github/copilot': 1.0.12
       vscode-jsonrpc: 8.2.1

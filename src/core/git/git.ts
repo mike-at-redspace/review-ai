@@ -66,6 +66,11 @@ export async function isGitRepository(): Promise<boolean> {
   }
 }
 
+export async function getGitRepoRoot(): Promise<string> {
+  const out = await executor("git rev-parse --show-toplevel");
+  return out.trim();
+}
+
 export async function getCurrentBranch(): Promise<string> {
   try {
     const output = await executor("git branch --show-current");

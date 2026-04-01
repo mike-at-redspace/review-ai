@@ -159,7 +159,11 @@ export function Dashboard({
       {viewState.type === "reviewing" && (
         <>
           <ReviewStream maxHeight={contentHeight} />
-          <ProgressBar phase={viewState.phase} isGenerating={true} />
+          <ProgressBar
+            phase={viewState.phase}
+            model={generator.selectedModel}
+            isGenerating={true}
+          />
         </>
       )}
 
