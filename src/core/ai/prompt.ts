@@ -113,10 +113,20 @@ export function buildReviewPrompt(
   branch: string,
   stat?: string,
   wasTruncated?: boolean,
-  repoFiles: string[] = []
+  repoFiles: string[] = [],
+  pathAliases?: Record<string, string>
 ): string {
   const { minSeverity, focusCategories } = config;
   const sections: string[] = [];
+
+  if (pathAliases && Object.keys(pathAliases).length) {
+    const lines = Object.entries(pathAliases)
+      .map(([alias, target]) => `  ${alias} → ${target}`)
+      .join("\n");
+    sections.push(
+      `Import path aliases — do NOT pass aliases like "${Object.keys(pathAliases)[0]}" to read_file. Resolve to real paths first:\n${lines}`
+    );
+  }
 
   const repoMap = buildRepoMapSection(repoFiles, config);
   if (repoMap) sections.push(repoMap);

@@ -1,3 +1,5 @@
+import { readFileSync } from "fs";
+import { join } from "path";
 import { approveAll, CopilotClient } from "@github/copilot-sdk";
 import type { ReviewConfig, ReviewProgressPhase } from "@core/config";
 import {
@@ -38,6 +40,29 @@ function stringifyArgs(args: unknown): string | undefined {
 
 type Session = Awaited<ReturnType<CopilotClient["createSession"]>>;
 
+/** Read tsconfig.json paths from repo root. Returns e.g. { "@core/*": "src/core/*" } */
+function getPathAliases(repoRoot?: string): Record<string, string> | undefined {
+  if (!repoRoot) return undefined;
+  try {
+    const raw = readFileSync(join(repoRoot, "tsconfig.json"), "utf-8");
+    // Strip single-line comments (tsconfig allows them)
+    const stripped = raw.replace(/\/\/.*$/gm, "");
+    const tsconfig = JSON.parse(stripped);
+    const paths: Record<string, string[]> | undefined =
+      tsconfig?.compilerOptions?.paths;
+    if (!paths || !Object.keys(paths).length) return undefined;
+    // Flatten: "@core/*": ["./src/core/*"] → "@core/*": "src/core/*"
+    const result: Record<string, string> = {};
+    for (const [alias, targets] of Object.entries(paths)) {
+      const target = targets[0]?.replace(/^\.\//, "");
+      if (target) result[alias] = target;
+    }
+    return Object.keys(result).length ? result : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 export class ReviewGenerator {
   private session: Session | null = null;
   public selectedModel: string | null = null;
@@ -68,13 +93,16 @@ export class ReviewGenerator {
         ? await getRepositoryFileList(MAX_REPO_MAP_FILES)
         : [];
 
+    const pathAliases = getPathAliases(this.options.workingDirectory);
+
     const prompt = buildReviewPrompt(
       content,
       config,
       branch,
       stat,
       wasTruncated,
-      repoFiles
+      repoFiles,
+      pathAliases
     );
 
     const model = selectModel(content, config);
