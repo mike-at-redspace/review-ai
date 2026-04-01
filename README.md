@@ -30,6 +30,9 @@ review-ai --staged
 # Compare branch to main
 review-ai --compare-to main
 
+# Advanced Use: model, branch & file types
+review-ai --model=gpt-5.3-codex --compare-to main --files **/*.jsx
+
 # Non-interactive run and write report
 review-ai -y --no-chat
 
